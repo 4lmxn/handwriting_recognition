@@ -18,14 +18,25 @@ CONFIGS_DIR = REPO_ROOT / "configs"
 
 
 def resolve_device(device: str) -> str:
-    """Resolve 'auto' to 'cuda' or 'cpu'. Never raises if torch is absent."""
+    """Resolve 'auto' to 'cuda', 'mps' or 'cpu'. Never raises if torch is absent.
+
+    CUDA is preferred over Apple Silicon's MPS backend: MPS accelerates inference
+    but has patchier operator coverage, so it is only chosen when no CUDA device
+    exists. Any explicit value is passed through untouched, which is how a run can
+    be forced onto "cpu" if an MPS operator gap ever shows up.
+    """
     if device != "auto":
         return device
     if importlib.util.find_spec("torch") is None:
         return "cpu"
     import torch
 
-    return "cuda" if torch.cuda.is_available() else "cpu"
+    if torch.cuda.is_available():
+        return "cuda"
+    mps_backend = getattr(torch.backends, "mps", None)
+    if mps_backend is not None and mps_backend.is_available():
+        return "mps"
+    return "cpu"
 
 
 def _load_yaml(name: str) -> dict:

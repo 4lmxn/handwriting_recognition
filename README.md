@@ -9,11 +9,17 @@ plan and current status.
 
 ## Hardware target
 
-This project is developed and tested on **CPU-only hardware** (no discrete/NVIDIA GPU
-available on the reference machine — Intel integrated graphics only). All code must run
-correctly on CPU. Device selection is automatic (`configs/app.yaml: device: auto`) so a
-CUDA GPU is used transparently if one becomes available later, but nothing in the
-codebase may *require* a GPU.
+**All code must run correctly on CPU** — nothing in the codebase may *require* a GPU.
+Device selection is automatic (`configs/app.yaml: device: auto`), resolving in order:
+
+| Device | Used for | Notes |
+|--------|----------|-------|
+| `cuda` | training + inference | Preferred. fp16 mixed precision enabled automatically (`configs/training.yaml: use_amp`). |
+| `mps` | Apple Silicon | Works for training and inference; ~1.3x faster than CPU on single-image TrOCR-small inference. AMP stays off (GradScaler is CUDA-only). |
+| `cpu` | fallback | Always supported. |
+
+Set `device` explicitly to any of these to override `auto` — the escape hatch if an
+MPS operator gap ever appears.
 
 Modeling strategy: fine-tune compact **pretrained** handwriting-recognition backbones
 (e.g. TrOCR-small, CRNN+CTC baselines) rather than training a large custom architecture
@@ -21,9 +27,19 @@ from scratch — see [`docs/ROADMAP.md`](docs/ROADMAP.md) for the rationale.
 
 ## Requirements
 
-- Ubuntu 22.04+ (or compatible Linux)
+- Linux (Ubuntu 22.04+), macOS (Apple Silicon) or Windows 10/11
 - Python 3.10–3.12
 - [`uv`](https://docs.astral.sh/uv/) for dependency management
+
+On an NVIDIA machine, `uv sync` installs the **CPU** build of torch by default. Install
+the CUDA build explicitly to actually use the GPU:
+
+```bash
+uv pip install torch --index-url https://download.pytorch.org/whl/cu124
+```
+
+Verify with `uv run python -c "from app.config import resolve_device; print(resolve_device('auto'))"`
+— it should print `cuda`.
 
 ## Setup
 

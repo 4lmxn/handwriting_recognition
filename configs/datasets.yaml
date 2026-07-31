@@ -4,7 +4,13 @@
 # back to PIL's built-in bitmap font rather than failing.
 
 synthetic:
+  # Paths for all three platforms are listed together; missing ones are filtered
+  # out at generation time (datasets/sources/synthetic.py: _existing_fonts), so
+  # the same config produces real fonts on Linux, macOS and Windows. If none
+  # match, generation silently falls back to PIL's tiny default bitmap font —
+  # which trains badly — so keep at least a few valid paths for your OS here.
   fonts:
+    # Linux
     - /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
     - /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf
     - /usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf
@@ -13,6 +19,21 @@ synthetic:
     - /usr/share/fonts/truetype/liberation/LiberationSerif-Italic.ttf
     - /usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf
     - /usr/share/fonts/truetype/ubuntu/Ubuntu-RI.ttf
+    # macOS
+    - /System/Library/Fonts/Supplemental/Arial.ttf
+    - /System/Library/Fonts/Supplemental/Arial Italic.ttf
+    - /System/Library/Fonts/Supplemental/Times New Roman.ttf
+    - /System/Library/Fonts/Supplemental/Georgia.ttf
+    - /System/Library/Fonts/Supplemental/Comic Sans MS.ttf
+    - /System/Library/Fonts/Supplemental/Verdana.ttf
+    # Windows
+    - C:/Windows/Fonts/arial.ttf
+    - C:/Windows/Fonts/ariali.ttf
+    - C:/Windows/Fonts/times.ttf
+    - C:/Windows/Fonts/georgia.ttf
+    - C:/Windows/Fonts/comic.ttf
+    - C:/Windows/Fonts/verdana.ttf
+    - C:/Windows/Fonts/segoeui.ttf
   font_sizes: [28, 36, 48]
   image_height: 64
   samples_per_item: 6

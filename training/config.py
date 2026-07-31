@@ -25,6 +25,7 @@ class TrainingConfig:
     save_every_n_steps: int
     seed: int
     augment: bool
+    use_amp: bool
     max_samples: int | None
     confusion_matrix_path: str | None
     hard_negative_min_count: int

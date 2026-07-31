@@ -8,7 +8,8 @@ def test_load_training_config_returns_expected_fields():
     assert config.model_name
     assert config.batch_size > 0
     assert config.num_epochs > 0
-    assert config.resolved_device() in ("cpu", "cuda")
+    assert config.resolved_device() in ("cpu", "cuda", "mps")
+    assert isinstance(config.use_amp, bool)
 
 
 def test_checkpoint_and_log_dir_paths_are_absolute():

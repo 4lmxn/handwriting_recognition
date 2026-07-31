@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from PIL import Image
 
 from datasets.config import SyntheticConfig, load_datasets_config
@@ -75,13 +73,22 @@ def test_split_assignment_respects_ratios_roughly():
 
 
 def test_existing_fonts_filters_missing_paths(tmp_path):
-    real_font = Path(load_datasets_config().synthetic.fonts[0])
+    # A real file on disk, not a system font path: the configured font list spans
+    # Linux/macOS/Windows locations, so none of them exists on every dev machine.
+    real_font = tmp_path / "exists.ttf"
+    real_font.touch()
     fake_font = tmp_path / "does_not_exist.ttf"
 
     result = _existing_fonts([str(real_font), str(fake_font)])
 
     assert str(real_font) in result
     assert str(fake_font) not in result
+
+
+def test_configured_fonts_include_some_for_this_platform():
+    # Guards the cross-platform font list: if every configured path is missing,
+    # synthetic generation silently degrades to PIL's default bitmap font.
+    assert _existing_fonts(load_datasets_config().synthetic.fonts)
 
 
 def test_prepare_falls_back_to_default_font_when_none_exist(tmp_path):

@@ -16,6 +16,11 @@ resume: true
 save_every_n_steps: 50
 seed: 42
 augment: true
+
+# Mixed-precision (fp16) training. Only takes effect on CUDA — on CPU/MPS the
+# training loop silently runs full fp32 regardless of this setting, so it is safe
+# to leave on when moving between machines.
+use_amp: true
 max_samples: null # cap total training samples for a quick run; null = use all
 
 # Hard-negative mining (see training/hard_negative_mining.py). Point this at

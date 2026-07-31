@@ -40,6 +40,16 @@ def find_latest_checkpoint(checkpoint_dir: Path) -> Path | None:
     return step_dirs[-1] if step_dirs else None
 
 
+def amp_enabled_for(device: str, use_amp: bool) -> bool:
+    """Mixed precision is CUDA-only here.
+
+    GradScaler's loss-scaling only has a CUDA implementation, and fp16 autocast on
+    MPS/CPU buys nothing for this model while risking NaN losses, so a config with
+    use_amp: true still trains in fp32 on those devices.
+    """
+    return use_amp and device == "cuda"
+
+
 def save_checkpoint(model, processor: TrOCRProcessor, checkpoint_dir: Path, step: int) -> Path:
     checkpoint_path = checkpoint_dir / f"step-{step}"
     model.save_pretrained(checkpoint_path)
@@ -116,6 +126,13 @@ def train(config: TrainingConfig) -> Path:
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
 
+    amp_enabled = amp_enabled_for(device, config.use_amp)
+    # When AMP is off, autocast/GradScaler are constructed against "cpu" and
+    # disabled, which makes them no-ops — so the loop below has one code path.
+    amp_device = "cuda" if amp_enabled else "cpu"
+    scaler = torch.amp.GradScaler(amp_device, enabled=amp_enabled)
+    logger.info("Device: %s, mixed precision (fp16): %s", device, amp_enabled)
+
     step = int(resume_checkpoint.name.split("-")[1]) if resume_checkpoint else 0
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
@@ -125,12 +142,16 @@ def train(config: TrainingConfig) -> Path:
                 pixel_values = batch["pixel_values"].to(device)
                 labels = batch["labels"].to(device)
 
-                outputs = model(pixel_values=pixel_values, labels=labels)
-                loss = outputs.loss
+                with torch.autocast(
+                    device_type=amp_device, dtype=torch.float16, enabled=amp_enabled
+                ):
+                    outputs = model(pixel_values=pixel_values, labels=labels)
+                    loss = outputs.loss
 
                 optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
 
                 step += 1
                 train_logger.log_scalar("train/loss", loss.item(), step)

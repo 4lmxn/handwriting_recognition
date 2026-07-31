@@ -1,6 +1,8 @@
 from pathlib import Path
 
-from app.config import AppConfig, load_config
+import pytest
+
+from app.config import AppConfig, load_config, resolve_device
 
 
 def test_load_config_returns_app_config():
@@ -31,11 +33,38 @@ def test_ensure_exist_creates_directories(app_config):
     assert app_config.paths.outputs.exists()
 
 
-def test_resolved_device_defaults_to_cpu_without_gpu(app_config):
-    # This machine has no CUDA GPU (Intel iGPU only); resolved device must be cpu
-    # unless the device is explicitly overridden away from "auto" in app.yaml.
+def test_resolved_device_is_a_supported_backend(app_config):
+    # Development happens across CPU-only, CUDA and Apple Silicon machines, so the
+    # only invariant is that "auto" lands on a backend the code supports.
     if app_config.device == "auto":
-        assert app_config.resolved_device() in ("cpu", "cuda")
+        assert app_config.resolved_device() in ("cpu", "cuda", "mps")
+
+
+def test_resolve_device_passes_explicit_values_through():
+    # An explicit device must never be second-guessed — this is the escape hatch
+    # for forcing a run onto cpu when an MPS operator gap shows up.
+    assert resolve_device("cpu") == "cpu"
+    assert resolve_device("cuda") == "cuda"
+    assert resolve_device("mps") == "mps"
+
+
+def test_resolve_device_prefers_cuda_over_mps(monkeypatch):
+    torch = pytest.importorskip("torch")
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
+    assert resolve_device("auto") == "cuda"
+
+
+def test_resolve_device_falls_back_to_mps_then_cpu(monkeypatch):
+    torch = pytest.importorskip("torch")
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
+    assert resolve_device("auto") == "mps"
+
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: False)
+    assert resolve_device("auto") == "cpu"
 
 
 def test_canvas_config_bounds_are_sane(app_config):
