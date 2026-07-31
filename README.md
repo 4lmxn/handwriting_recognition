@@ -31,15 +31,24 @@ from scratch — see [`docs/ROADMAP.md`](docs/ROADMAP.md) for the rationale.
 - Python 3.10–3.12
 - [`uv`](https://docs.astral.sh/uv/) for dependency management
 
-On an NVIDIA machine, `uv sync` installs the **CPU** build of torch by default. Install
-the CUDA build explicitly to actually use the GPU:
+The torch build is selected per-platform in `pyproject.toml` (`[tool.uv.sources]`):
+Windows pulls the **CUDA (cu126)** build, everything else pulls the default build
+(which already includes MPS on Apple Silicon). `uv sync` is all that's needed.
+
+Do **not** try to swap the build with `uv pip install torch --index-url ...` — `uv run`
+re-syncs the environment against `uv.lock` on every invocation and will revert it. To
+change the CUDA version, edit the `pytorch-cu126` index in `pyproject.toml` and re-run
+`uv lock`. Check what the index actually carries first; `cu124`, for instance, stops at
+torch 2.6.0 and would silently downgrade the pin.
+
+Verify the GPU is live:
 
 ```bash
-uv pip install torch --index-url https://download.pytorch.org/whl/cu124
+uv run python -c "import torch; print(torch.version.cuda, torch.cuda.is_available())"
+uv run python -c "from app.config import resolve_device; print(resolve_device('auto'))"
 ```
 
-Verify with `uv run python -c "from app.config import resolve_device; print(resolve_device('auto'))"`
-— it should print `cuda`.
+Expect a CUDA version + `True`, then `cuda`.
 
 ## Setup
 

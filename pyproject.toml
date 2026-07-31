@@ -64,13 +64,32 @@ dev = [
     "mypy>=1.10",
 ]
 
+# Torch build selection is per-platform, and must live here rather than being
+# installed by hand: `uv run` re-syncs the environment against uv.lock on every
+# invocation, so a manual `uv pip install torch --index-url ...` gets reverted.
+#
+# Windows is the CUDA training machine (RTX 3050); macOS gets the default build,
+# which already carries MPS. cu126 is deliberate — the cu124 index stops at torch
+# 2.6.0, so pinning it there would silently downgrade torch. Add a linux marker
+# to the cu126 list if a Linux GPU box joins.
 [tool.uv.sources]
-torch = { index = "pytorch-cpu" }
-torchvision = { index = "pytorch-cpu" }
+torch = [
+    { index = "pytorch-cu126", marker = "sys_platform == 'win32'" },
+    { index = "pytorch-cpu", marker = "sys_platform != 'win32'" },
+]
+torchvision = [
+    { index = "pytorch-cu126", marker = "sys_platform == 'win32'" },
+    { index = "pytorch-cpu", marker = "sys_platform != 'win32'" },
+]
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
 explicit = true
 
 [tool.ruff]
