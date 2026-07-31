@@ -1,5 +1,6 @@
 import math
 from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import pytest
 import torch
@@ -32,3 +33,30 @@ def test_compute_confidence_matches_hand_computed_softmax():
 def test_compute_confidence_returns_zero_for_empty_scores():
     fake_output = SimpleNamespace(scores=(), sequences=torch.tensor([[0]]))
     assert Recognizer._compute_confidence(fake_output) == 0.0
+
+
+@patch("recognition.recognizer.VisionEncoderDecoderModel")
+@patch("recognition.recognizer.TrOCRProcessor")
+def test_recognizer_does_not_wrap_with_peft_when_no_adapter(mock_processor, mock_vem):
+    # Sanity: default construction (adapter_path=None) must NOT import peft
+    # or wrap the model. This preserves the pre-Phase-5 code path for
+    # everyone who doesn't have an adapter yet.
+    with patch("peft.PeftModel.from_pretrained") as mock_peft_load:
+        Recognizer(model_name="fake-model", device="cpu")
+    mock_peft_load.assert_not_called()
+
+
+@patch("recognition.recognizer.VisionEncoderDecoderModel")
+@patch("recognition.recognizer.TrOCRProcessor")
+def test_recognizer_wraps_with_peft_when_adapter_path_set(mock_processor, mock_vem, tmp_path):
+    base_model = MagicMock()
+    mock_vem.from_pretrained.return_value = base_model
+    wrapped = MagicMock()
+
+    with patch("peft.PeftModel") as mock_peft_class:
+        mock_peft_class.from_pretrained.return_value = wrapped
+        Recognizer(model_name="fake-model", device="cpu", adapter_path=tmp_path / "adapter")
+
+    mock_peft_class.from_pretrained.assert_called_once_with(base_model, str(tmp_path / "adapter"))
+    wrapped.to.assert_called_once_with("cpu")
+    wrapped.eval.assert_called_once()

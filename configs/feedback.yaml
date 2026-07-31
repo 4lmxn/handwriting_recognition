@@ -35,3 +35,53 @@ adapter:
 # each incremental update writes a new dir under adapter_dir, so a bad
 # adapter can be rolled back by pointing at an earlier version.
 adapter_dir: "weights/adapters"
+
+# Replay buffer (Phase 5, PR 3). Every incremental adapter update mixes
+# the user's accumulated corrections with a random sub-sample of base
+# training data — the replay slice prevents the adapter from drifting away
+# from the general handwriting distribution as it personalizes to the
+# user. See docs/ROADMAP.md Phase 5.
+#
+# replay_ratio interpretation: fraction of the update batch that is BASE
+# (old) data. 0.7 = 70% base + 30% corrections. Reasonable if the user
+# provides a stream of corrections; if the pool is tiny (< a few dozen),
+# every correction lands in the batch and base fills the remainder.
+replay:
+  base_manifests: ["cvl"]
+  base_splits: ["train"]
+  replay_ratio: 0.7
+  max_total_samples: 512
+  min_pending_corrections: 5   # skip the update entirely if fewer new
+                                # corrections than this exist — a single
+                                # typo isn't worth a training round
+  max_corrections: 200          # cap on how many historical corrections
+                                # get replayed each update (most-recent
+                                # kept). Bounds compute as the pool grows.
+  seed: 42
+
+# Incremental training (Phase 5, PR 3). Mirrors training/train.py shape
+# but only adapter params are trainable — base stays frozen. Learning
+# rate is higher than full-model fine-tune (5e-5) because adapter has
+# ~100x fewer params to move.
+training:
+  device: "auto"
+  batch_size: 4
+  num_epochs: 1
+  learning_rate: 0.0001
+  max_target_length: 32
+  use_amp: true                 # CUDA-only, same guard as training/train.py
+  augment: true
+  log_dir: "logs/tensorboard"
+  run_name_prefix: "phase5-adapter"
+
+# Before/after evaluation (Phase 5, PR 3). Held-out slice of a base
+# manifest is scored twice — once on the pre-update recognizer, once on
+# the post-update recognizer. If the CER regression exceeds
+# max_cer_regression the new adapter is REJECTED (saved as
+# v-<ts>-REJECTED/, not marked applied) — see the Phase 4 catastrophic-
+# drift finding for why this gate matters.
+eval:
+  manifest: "cvl"
+  split: "test"
+  limit: 100
+  max_cer_regression: 0.02

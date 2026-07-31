@@ -1,4 +1,10 @@
-from feedback.config import FeedbackConfig, load_feedback_config
+from feedback.config import (
+    FeedbackConfig,
+    IncrementalEvalConfig,
+    IncrementalTrainingConfig,
+    ReplayConfig,
+    load_feedback_config,
+)
 from models.adapters.config import LoraAdapterConfig
 
 
@@ -40,7 +46,7 @@ def test_adapter_defaults_match_phase5_decision():
 
 def test_feedback_config_can_be_constructed_directly():
     # Enables tests + one-off scripts to build a temp config without going
-    # through YAML.
+    # through YAML. Nested configs default to sensible YAML-load defaults.
     config = FeedbackConfig(
         storage_dir="a",
         image_dir="b/c",
@@ -51,3 +57,25 @@ def test_feedback_config_can_be_constructed_directly():
     assert config.image_dir == "b/c"
     assert config.adapter_dir == "weights/adapters"
     assert config.adapter.r == 4
+    # Nested configs should have safe defaults so tests don't need to
+    # spell out every field.
+    assert isinstance(config.replay, ReplayConfig)
+    assert isinstance(config.training, IncrementalTrainingConfig)
+    assert isinstance(config.eval, IncrementalEvalConfig)
+
+
+def test_replay_config_defaults_match_phase5_decision():
+    config = load_feedback_config()
+    # Locked-in per memory:phase5_decisions.md — max_corrections=200 is
+    # part of the "replay all + cap" policy. Don't quietly drop the cap.
+    assert config.replay.max_corrections == 200
+    assert 0.0 <= config.replay.replay_ratio <= 1.0
+    assert config.replay.min_pending_corrections > 0
+
+
+def test_eval_config_has_regression_gate():
+    config = load_feedback_config()
+    # Load-bearing per Phase 4 catastrophic-drift evidence: adapter
+    # updates MUST be gated on max_cer_regression. Never remove this
+    # field or set it to something huge without revisiting the ROADMAP.
+    assert config.eval.max_cer_regression > 0.0

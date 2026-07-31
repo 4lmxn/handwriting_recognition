@@ -10,6 +10,7 @@ only how confidently the model committed to it.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -31,13 +32,28 @@ class Recognizer:
         max_new_tokens: int = 32,
         repetition_penalty: float = 1.0,
         no_repeat_ngram_size: int = 0,
+        adapter_path: Path | None = None,
     ) -> None:
         self._device = device
         self._max_new_tokens = max_new_tokens
         self._repetition_penalty = repetition_penalty
         self._no_repeat_ngram_size = no_repeat_ngram_size
         self._processor = TrOCRProcessor.from_pretrained(model_name)
-        self._model = VisionEncoderDecoderModel.from_pretrained(model_name)
+        # No annotation on `model` on purpose: transformers/peft are
+        # ignore_missing_imports in mypy, so leaving this as inferred-Any
+        # keeps `.generate()` accessible on both the plain base model and
+        # the peft-wrapped version. Annotating as `torch.nn.Module` would
+        # make mypy hide `.generate`.
+        model = VisionEncoderDecoderModel.from_pretrained(model_name)
+        # Optional Phase 5 personalization adapter. Wrapped only if a
+        # path is passed; a None keeps the base model behavior untouched
+        # so tests, CLI eval, and un-personalized users all see the plain
+        # recognizer path.
+        if adapter_path is not None:
+            from peft import PeftModel
+
+            model = PeftModel.from_pretrained(model, str(adapter_path))
+        self._model = model
         self._model.to(device)
         self._model.eval()
 
