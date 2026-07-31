@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Environments
+.venv/
+venv/
+.python-version
+
+# uv
+uv.lock.bak
+
+# Project data — never commit large binary artifacts
+datasets/raw/*
+!datasets/raw/.gitkeep
+datasets/processed/*
+!datasets/processed/.gitkeep
+datasets/manifests/*.json
+weights/*
+!weights/.gitkeep
+outputs/*
+!outputs/.gitkeep
+logs/*
+!logs/.gitkeep
+experiments/*
+!experiments/.gitkeep
+
+# TensorBoard / training runs
+runs/
+*.ckpt
+*.pt
+*.pth
+*.onnx
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Local overrides
+configs/local.yaml
+.env

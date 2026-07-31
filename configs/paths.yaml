@@ -1,0 +1,9 @@
+# Filesystem layout. All paths are relative to the repository root and are
+# resolved to absolute paths by app/config.py at load time.
+datasets_raw: "datasets/raw"
+datasets_processed: "datasets/processed"
+datasets_manifests: "datasets/manifests"
+weights: "weights"
+outputs: "outputs"
+logs: "logs"
+experiments: "experiments"

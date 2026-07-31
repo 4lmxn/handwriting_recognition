@@ -1,0 +1,22 @@
+name: "Handwriting Recognition"
+version: "0.1.0"
+
+# auto: use CUDA if available (via torch), otherwise CPU. Never hard-required.
+device: "auto"
+
+log_level: "INFO"
+
+window:
+  title: "Handwriting Recognition"
+  width: 1280
+  height: 800
+
+canvas:
+  default_pen_width: 4
+  min_pen_width: 1
+  max_pen_width: 40
+  background_color: "#FFFFFF"
+  pen_color: "#000000"
+  grid_enabled: false
+  grid_spacing: 20
+  undo_stack_depth: 50

@@ -1,0 +1,90 @@
+[project]
+name = "handwriting-recognition"
+version = "0.1.0"
+description = "Offline handwriting recognition system with continual learning from user feedback"
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+license = { text = "Proprietary" }
+
+dependencies = [
+    "pyyaml>=6.0",
+    "numpy>=1.26,<2.0",
+    "pillow>=10.0",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+# Phase 1: GUI shell + drawing canvas
+gui = [
+    "pyside6>=6.7",
+]
+
+# Later phases: image preprocessing / segmentation
+cv = [
+    "opencv-python-headless>=4.9",
+    "scikit-image>=0.23",
+    "albumentations>=1.4",
+]
+
+# Later phases: model training / inference (CPU builds — see [tool.uv.sources])
+ml = [
+    "torch>=2.3",
+    "torchvision>=0.18",
+    "transformers>=4.42",
+    "sentencepiece>=0.2",
+    "torchmetrics>=1.4",
+    "onnx>=1.16",
+    "onnxruntime>=1.18",
+]
+
+# Later phases: datasets, PDFs, analysis, plotting
+data = [
+    "pandas>=2.2",
+    "scipy>=1.13",
+    "scikit-learn>=1.5",
+    "matplotlib>=3.9",
+    "pymupdf>=1.24",
+]
+
+# Later phases: training observability
+log = [
+    "tensorboard>=2.17",
+]
+
+dev = [
+    "pytest>=8.2",
+    "pytest-qt>=4.4",
+    "ruff>=0.5",
+    "mypy>=1.10",
+]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+qt_api = "pyside6"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app", "datasets", "training", "models", "preprocessing", "segmentation", "recognition", "language_model", "feedback"]
