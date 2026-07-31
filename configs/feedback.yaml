@@ -1,0 +1,18 @@
+# Feedback storage foundation (Phase 5, PR 1). Records of user corrections
+# captured via the drawing canvas (later PR) land here; the incremental
+# adapter training loop (later PR) consumes them via FeedbackStore.
+#
+# Two-dir layout intentional:
+# - storage_dir/  holds JSONL metadata (small, human-inspectable). Not the
+#   images themselves so `cat feedback/corrections.jsonl` stays useful.
+# - image_dir/    sits under datasets/processed/ so the existing
+#   HandwritingDataset (which joins paths.datasets_processed +
+#   sample.image_path) can consume corrections without any special-casing
+#   in training/dataset.py. Records store image_path as
+#   "feedback/<uuid>.png" — relative, same convention as CVL/synthetic.
+#
+# Adapter, replay-buffer, incremental-training, and before/after-eval
+# tunables land here in subsequent Phase 5 PRs as those components come
+# online — see docs/ROADMAP.md Phase 5.
+storage_dir: "feedback"
+image_dir: "datasets/processed/feedback"
