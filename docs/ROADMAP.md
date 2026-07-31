@@ -89,13 +89,39 @@ Known gaps carried forward rather than fixed here: IAM/CVL writer IDs aren't pop
 line writer-level directory structure hasn't been exploited for writer identification.
 None of these block Phase 3.
 
-## Phase 3 — Baseline recognition (pretrained backbone)
+## Phase 3 — Baseline recognition (pretrained backbone) ✅ (complete)
 
-- Integrate a pretrained HTR backbone (TrOCR-small via `transformers`, CPU inference) —
-  benchmark against a lighter CRNN+CTC baseline for CPU latency.
-- Inference pipeline: image → preprocessing → model → text → confidence score.
-- Wire a "Recognize" action into the Drawing Canvas tab and a new Upload Image tab.
-- Evaluation harness: CER, WER, character/word/sentence accuracy on a held-out split.
+- Integrated `microsoft/trocr-small-handwritten` via `transformers` (CPU inference,
+  config in `configs/recognition.yaml` / `recognition/config.py`). A CRNN+CTC baseline
+  was not built for comparison: it would need training data/time we don't have yet,
+  whereas TrOCR-small is already pretrained specifically for handwriting, so it's the
+  only fair baseline available right now — revisit the comparison once Phase 4 fine-tuning
+  exists. Required pinning `transformers<5` and adding `protobuf` — the bleeding-edge
+  v5 line couldn't load this (older-format) model repo's tokenizer.
+- Measured CPU latency: ~10s one-time model load, ~0.12s per single-image inference —
+  fine for interactive use.
+- `recognition/recognizer.py`: `Recognizer.recognize(image) -> RecognitionResult(text,
+  confidence)`. Confidence is mean per-token generation probability (softmax over
+  logits at each decoding step, at the chosen token) — a measure of the model's own
+  certainty, not of correctness.
+- Wired a "Recognize" button into the Drawing Canvas tab (`app/gui/tabs/drawing_canvas_tab.py`):
+  guards on a blank canvas, lazily constructs the (slow-to-load) recognizer on first use,
+  converts the canvas `QImage` to a grayscale numpy array, and shows
+  `"Recognized: {text} ({confidence:.0%} confidence)"`. Runs synchronously — no threading
+  yet, acceptable at ~0.12s/call but worth revisiting if slower models get used later.
+  Visually verified: a meaningless scribble correctly produced a low-confidence (16%)
+  nonsense result rather than a falsely-confident one.
+- Evaluation harness (`training/evaluation.py`): CER, WER, character/word accuracy,
+  exact-match rate, via a generic Levenshtein distance. `scripts/evaluate_model.py` runs
+  it against any dataset manifest. Smoke-tested against 40 synthetic-dataset samples
+  (CER 0.75) — expected to be mediocre since synthetic data is procedurally-rendered
+  *printed* text, not real handwriting, and TrOCR-small wasn't trained on isolated
+  single characters (a third of the synthetic vocabulary). Real accuracy validation
+  needs IAM/CVL, which require the user's manual download (Phase 2).
+- No Upload Image tab yet — deferred to Phase 6 (document/upload pipeline) rather than
+  duplicated here ahead of segmentation/multi-region support.
+- 114 tests total (up from 91), all mocking the heavy model in GUI/unit tests — nothing
+  in the automated suite downloads a model or requires network. `ruff`/`mypy` clean.
 
 ## Phase 4 — Fine-tuning, confusion analysis, hard-negative mining
 

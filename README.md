@@ -31,12 +31,16 @@ from scratch — see [`docs/ROADMAP.md`](docs/ROADMAP.md) for the rationale.
 # Install uv (skip if already installed)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Sync Phase 1 dependencies (GUI + dev tooling)
-uv sync --extra gui --extra dev
+# Full sync (GUI + dev + preprocessing/datasets + ML/recognition)
+uv sync --extra gui --extra dev --extra cv --extra ml
 
 # Later phases will additionally need:
-#   uv sync --extra gui --extra dev --extra cv --extra ml --extra data --extra log
+#   uv sync --extra gui --extra dev --extra cv --extra ml --extra data --extra log --extra export
 ```
+
+`ml` pulls in CPU-build `torch` + `transformers` (~200MB) for the recognition pipeline —
+first run of anything in `recognition/` also downloads the `microsoft/trocr-small-handwritten`
+model weights (~250MB) from Hugging Face on first use.
 
 ## Running the app
 
@@ -67,7 +71,7 @@ logs/                Application and training logs (not committed)
 models/              Model backbones and personalization adapters (later phase)
 outputs/             Inference outputs (not committed)
 preprocessing/       Image preprocessing (deskew, denoise, normalization) + augmentation pipeline
-recognition/         Recognition pipeline glue code (later phase)
+recognition/         TrOCR-based recognition pipeline (image -> text + confidence)
 scripts/             prepare_dataset.py and other operational scripts
 segmentation/        Line/word/character segmentation
 tests/               Unit, integration, and GUI tests
@@ -95,3 +99,13 @@ uv run python scripts/prepare_dataset.py cvl          # requires manual download
 
 Each run writes normalized images under `datasets/processed/<name>/` and a manifest at
 `datasets/manifests/<name>.jsonl` (see `datasets/manifest.py`).
+
+## Evaluating recognition
+
+```bash
+uv run python scripts/evaluate_model.py synthetic --split test --limit 100
+```
+
+Reports CER/WER/character/word accuracy against any prepared dataset's manifest. The
+`synthetic` dataset is printed text, not real handwriting — useful as a pipeline smoke
+test, not a substitute for evaluating against IAM/CVL.

@@ -1,0 +1,9 @@
+# Baseline recognition model — see docs/ROADMAP.md Phase 3. TrOCR-small was
+# chosen over training a CRNN+CTC baseline from scratch: this project's
+# modeling strategy (see ROADMAP "Decisions on record") is to fine-tune a
+# pretrained backbone rather than train one from scratch on CPU-only hardware,
+# and TrOCR-small-handwritten is already pretrained specifically for
+# handwriting recognition, unlike an untrained CRNN.
+model_name: "microsoft/trocr-small-handwritten"
+device: "auto" # auto | cpu | cuda
+max_new_tokens: 32

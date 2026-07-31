@@ -26,13 +26,19 @@ cv = [
     "albumentations>=1.4",
 ]
 
-# Later phases: model training / inference (CPU builds — see [tool.uv.sources])
+# Phase 3+: model training / inference (CPU builds — see [tool.uv.sources])
 ml = [
     "torch>=2.3",
     "torchvision>=0.18",
-    "transformers>=4.42",
+    "transformers>=4.42,<5",
     "sentencepiece>=0.2",
+    "protobuf>=4.25",
     "torchmetrics>=1.4",
+]
+
+# Phase 10: ONNX export/quantization — separate so it doesn't block earlier
+# phases on wheel availability for the current Python version.
+export = [
     "onnx>=1.16",
     "onnxruntime>=1.18",
 ]

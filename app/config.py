@@ -17,6 +17,17 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 CONFIGS_DIR = REPO_ROOT / "configs"
 
 
+def resolve_device(device: str) -> str:
+    """Resolve 'auto' to 'cuda' or 'cpu'. Never raises if torch is absent."""
+    if device != "auto":
+        return device
+    if importlib.util.find_spec("torch") is None:
+        return "cpu"
+    import torch
+
+    return "cuda" if torch.cuda.is_available() else "cpu"
+
+
 def _load_yaml(name: str) -> dict:
     path = CONFIGS_DIR / name
     if not path.exists():
@@ -82,14 +93,7 @@ class AppConfig:
     paths: PathsConfig = field(repr=False)
 
     def resolved_device(self) -> str:
-        """Resolve 'auto' to 'cuda' or 'cpu'. Never raises if torch is absent."""
-        if self.device != "auto":
-            return self.device
-        if importlib.util.find_spec("torch") is None:
-            return "cpu"
-        import torch
-
-        return "cuda" if torch.cuda.is_available() else "cpu"
+        return resolve_device(self.device)
 
 
 def load_config() -> AppConfig:

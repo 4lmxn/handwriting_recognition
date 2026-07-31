@@ -1,16 +1,20 @@
-"""Drawing Canvas tab: pen controls + freehand canvas.
+"""Drawing Canvas tab: pen controls + freehand canvas + recognition.
 
-Recognition is not wired up yet (see docs/ROADMAP.md, Phase 3 onward) — the
-status label below the canvas says so explicitly rather than faking a result.
+The "Recognize" button converts the canvas to a grayscale numpy array and
+runs it through `recognition.recognizer.Recognizer`. The recognizer is heavy
+to construct (loads an ML model), so it is created lazily on first use
+rather than at tab construction time.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtGui import QImage, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QColorDialog,
     QFileDialog,
@@ -24,6 +28,12 @@ from PySide6.QtWidgets import (
 
 from app.config import CanvasConfig, PathsConfig
 from app.gui.widgets.canvas_widget import CanvasWidget
+from recognition.config import load_recognition_config
+from recognition.recognizer import Recognizer
+
+_PLACEHOLDER_TEXT = "Draw something and click Recognize."
+_EMPTY_CANVAS_TEXT = "Canvas is empty — draw something first."
+_RECOGNIZING_TEXT = "Recognizing…"
 
 
 class DrawingCanvasTab(QWidget):
@@ -33,6 +43,7 @@ class DrawingCanvasTab(QWidget):
         super().__init__(parent)
         self._paths_config = paths_config
         self._canvas = CanvasWidget(canvas_config)
+        self._recognizer: Recognizer | None = None
 
         layout = QVBoxLayout(self)
         layout.addLayout(self._build_toolbar(canvas_config))
@@ -87,13 +98,14 @@ class DrawingCanvasTab(QWidget):
         save_button.clicked.connect(self._on_save)
         toolbar.addWidget(save_button)
 
+        self._recognize_button = QPushButton("Recognize")
+        self._recognize_button.clicked.connect(self._on_recognize)
+        toolbar.addWidget(self._recognize_button)
+
         return toolbar
 
     def _build_status_bar(self) -> QLabel:
-        self._status_label = QLabel(
-            "Recognition is not implemented yet — this canvas currently only captures strokes. "
-            "See docs/ROADMAP.md."
-        )
+        self._status_label = QLabel(_PLACEHOLDER_TEXT)
         self._status_label.setStyleSheet("color: gray; font-style: italic;")
         return self._status_label
 
@@ -135,6 +147,32 @@ class DrawingCanvasTab(QWidget):
         if file_path:
             self._canvas.save_to_file(Path(file_path))
 
+    def _on_recognize(self) -> None:
+        if self._canvas.is_blank():
+            self._status_label.setText(_EMPTY_CANVAS_TEXT)
+            return
+
+        self._recognize_button.setEnabled(False)
+        self._status_label.setText(_RECOGNIZING_TEXT)
+        # Force the "Recognizing…" state to actually paint before the
+        # (synchronous) recognizer call blocks the event loop.
+        QApplication.processEvents()
+        try:
+            if self._recognizer is None:
+                recognition_config = load_recognition_config()
+                self._recognizer = Recognizer(
+                    recognition_config.model_name,
+                    device=recognition_config.resolved_device(),
+                    max_new_tokens=recognition_config.max_new_tokens,
+                )
+            image = self._canvas_to_grayscale_array()
+            result = self._recognizer.recognize(image)
+            self._status_label.setText(
+                f"Recognized: {result.text} ({result.confidence:.0%} confidence)"
+            )
+        finally:
+            self._recognize_button.setEnabled(True)
+
     def _on_stroke_finished(self) -> None:
         self._refresh_undo_redo_buttons()
 
@@ -142,8 +180,36 @@ class DrawingCanvasTab(QWidget):
         self._undo_button.setEnabled(self._canvas.can_undo())
         self._redo_button.setEnabled(self._canvas.can_redo())
 
+    # -- Recognition helpers -------------------------------------------------
+
+    def _canvas_to_grayscale_array(self) -> np.ndarray:
+        return qimage_to_grayscale_array(self._canvas.get_image())
+
     # -- Exposed for tests -------------------------------------------------
 
     @property
     def canvas(self) -> CanvasWidget:
         return self._canvas
+
+    @property
+    def status_label(self) -> QLabel:
+        return self._status_label
+
+    @property
+    def recognize_button(self) -> QPushButton:
+        return self._recognize_button
+
+
+def qimage_to_grayscale_array(image: QImage) -> np.ndarray:
+    """Convert a QImage to a grayscale (H, W) uint8 numpy array, ink-dark-on-
+    light-background — matching the convention used everywhere else in the
+    project (see preprocessing/image_ops.py)."""
+    gray_image = image.convertToFormat(QImage.Format.Format_Grayscale8)
+    width = gray_image.width()
+    height = gray_image.height()
+    bytes_per_line = gray_image.bytesPerLine()
+
+    buffer = gray_image.constBits()
+    raw = np.frombuffer(buffer, dtype=np.uint8, count=bytes_per_line * height)
+    padded = raw.reshape(height, bytes_per_line)
+    return np.ascontiguousarray(padded[:, :width])
