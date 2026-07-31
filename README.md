@@ -57,8 +57,8 @@ GUI tests run headless via the Qt `offscreen` platform plugin automatically (see
 
 ```
 app/                 PySide6 GUI application (main window, tabs, widgets)
-configs/             YAML configuration (paths, app, model, training) — no hardcoded values in code
-datasets/            Raw/processed data and manifests (not committed; see .gitignore)
+configs/             YAML configuration (paths, app, datasets, augmentation, model, training)
+datasets/            Manifest schema, dataset registry, dataset sources; raw/processed data (not committed)
 docs/                Documentation, including the phase-by-phase ROADMAP
 experiments/         Training run outputs, kept out of git
 feedback/            User-correction storage and incremental training scheduling (later phase)
@@ -66,10 +66,10 @@ language_model/      Language-model-assisted decoding and correction (later phas
 logs/                Application and training logs (not committed)
 models/              Model backbones and personalization adapters (later phase)
 outputs/             Inference outputs (not committed)
-preprocessing/       Image preprocessing (deskew, denoise, normalization) (later phase)
+preprocessing/       Image preprocessing (deskew, denoise, normalization) + augmentation pipeline
 recognition/         Recognition pipeline glue code (later phase)
-scripts/             One-off / operational scripts
-segmentation/         Line/word/character segmentation (later phase)
+scripts/             prepare_dataset.py and other operational scripts
+segmentation/        Line/word/character segmentation
 tests/               Unit, integration, and GUI tests
 training/            Training loops, dataset adapters, evaluation (later phase)
 weights/             Model checkpoints (not committed; see .gitignore)
@@ -77,6 +77,21 @@ weights/             Model checkpoints (not committed; see .gitignore)
 
 ## Configuration
 
-All paths and hyperparameters live in `configs/*.yaml`, loaded through
-`app/config.py`. Do not hardcode paths or hyperparameters in code — add a field to the
-relevant config file instead.
+All paths and hyperparameters live in `configs/*.yaml`, loaded through `app/config.py`
+(app/paths), `datasets/config.py` (dataset acquisition/synthetic generation), and
+`preprocessing/augmentation.py` (augmentation). Do not hardcode paths or hyperparameters
+in code — add a field to the relevant config file instead.
+
+## Preparing datasets
+
+```bash
+uv sync --extra gui --extra dev --extra cv   # add cv extras for dataset/preprocessing work
+uv run python scripts/prepare_dataset.py synthetic   # always available, no download
+uv run python scripts/prepare_dataset.py mnist        # auto-downloads (~11MB)
+uv run python scripts/prepare_dataset.py emnist       # auto-downloads (~550MB) — run deliberately
+uv run python scripts/prepare_dataset.py iam          # requires manual download first, see datasets/registry.py
+uv run python scripts/prepare_dataset.py cvl          # requires manual download first, see datasets/registry.py
+```
+
+Each run writes normalized images under `datasets/processed/<name>/` and a manifest at
+`datasets/manifests/<name>.jsonl` (see `datasets/manifest.py`).

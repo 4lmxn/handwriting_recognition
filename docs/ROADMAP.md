@@ -41,21 +41,53 @@ tests pass, lint/type-check clean — before the next one starts.
   construction) running headless via `QT_QPA_PLATFORM=offscreen`. `ruff` and `mypy`
   clean.
 
-## Phase 2 — Preprocessing & dataset pipeline
+## Phase 2 — Preprocessing & dataset pipeline ✅ (complete)
 
-- Unified preprocessing: grayscale, adaptive thresholding, deskew, denoise, connected
-  component analysis, baseline detection, normalization.
-- Line / word / character segmentation.
-- Dataset acquisition + unified manifest format (image path, transcript, source dataset,
-  writer id where available). Start with datasets that are freely downloadable without a
-  separate licensing agreement: **EMNIST, MNIST, IAM** (registration required, user must
-  supply credentials — not auto-bypassed), **CVL**. NIST SD19, RIMES, KHATT, CASIA,
-  Bentham are added opportunistically since several require registration/licensing that
-  can't be automated.
-- Augmentation pipeline (Albumentations): rotation, skew, slant, noise, blur, perspective,
-  brightness/contrast, ink fading, pen-thickness simulation, paper texture, compression
-  artifacts, cropping, scaling, elastic transforms.
-- Dataset tests: manifest schema validation, augmentation determinism/seeding.
+- Unified preprocessing (`preprocessing/image_ops.py`): grayscale, adaptive
+  thresholding, denoise, deskew (with skew-angle estimation), connected component
+  analysis, baseline estimation, resize+pad normalization, intensity normalization.
+- Segmentation (`segmentation/`): line and word segmentation via projection profiles,
+  character segmentation via connected components. Character segmentation is a
+  best-effort heuristic — it can't split touching/cursive glyphs, which is fine because
+  the planned CTC/attention recognizer (Phase 3+) doesn't depend on it; it exists for the
+  GUI's optional segmentation visualization.
+- Unified dataset manifest format (`datasets/manifest.py`: `DatasetSample` — image path,
+  transcript, source, split, label type, writer id) plus a registry
+  (`datasets/registry.py`) documenting every dataset from the original spec and how each
+  is acquired.
+- Five working dataset sources (`datasets/sources/`), run via
+  `scripts/prepare_dataset.py <name>`:
+  - **synthetic** — procedurally rendered chars/words from system fonts; always
+    available, no license, seeds coverage of the Phase 4 confusable classes.
+  - **mnist** / **emnist** — auto-downloaded (IDX format), no registration. EMNIST's
+    known transpose-orientation quirk is corrected; label mapping is read from the
+    archive's own mapping file rather than assumed.
+  - **iam** — parses `ascii/lines.txt` + line images once the user has manually
+    downloaded and registered for IAM (see `datasets/registry.py`). All samples
+    currently land in the "train" split — IAM's official writer-independent split files
+    are a documented follow-up, not guessed at here.
+  - **cvl** — parses filename-embedded transcriptions once the user has manually
+    downloaded CVL. This format isn't officially documented, so the parsing rules
+    (skip second-segment `-6-`, skip umlauts) were verified against the published
+    reference implementation in `amzn/convolutional-handwriting-gan`, not guessed.
+  - NIST SD19, RIMES, KHATT, Bentham, CASIA remain registry entries with acquisition
+    instructions only — not implemented (out of scope until prioritized; see
+    "Explicitly deferred" note below).
+- Augmentation pipeline (`preprocessing/augmentation.py`, Albumentations-based, fully
+  config-driven via `configs/augmentation.yaml`): rotation, shear/slant, scaling,
+  perspective, elastic transform, blur, noise, brightness/contrast, JPEG compression
+  artifacts, crop/pad, pen-thickness (erosion/dilation), ink fading, and a synthetic
+  paper-texture blend. Random word spacing is intentionally not a pixel-level transform
+  here — it's exercised at synthetic-render time instead, since it only makes sense
+  before text is flattened into an image.
+- 91 tests total across Phase 1+2 (added: image ops, segmentation, manifest/registry,
+  every dataset source, augmentation determinism), all offline/network-free except one
+  manual smoke test against the real MNIST URL. `ruff` and `mypy` clean.
+
+Known gaps carried forward rather than fixed here: IAM/CVL writer IDs aren't populated
+(`writer_id=None`), IAM's official train/val/test split isn't wired up, and CVL word vs.
+line writer-level directory structure hasn't been exploited for writer identification.
+None of these block Phase 3.
 
 ## Phase 3 — Baseline recognition (pretrained backbone)
 

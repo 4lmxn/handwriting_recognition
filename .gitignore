@@ -21,6 +21,7 @@ datasets/raw/*
 datasets/processed/*
 !datasets/processed/.gitkeep
 datasets/manifests/*.json
+datasets/manifests/*.jsonl
 weights/*
 !weights/.gitkeep
 outputs/*

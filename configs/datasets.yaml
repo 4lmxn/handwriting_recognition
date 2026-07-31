@@ -1,0 +1,78 @@
+# Dataset acquisition and synthetic-generation parameters.
+# Font paths are OS font-cache locations, not project paths — if a font is
+# missing on a given machine, datasets/sources/synthetic.py skips it and falls
+# back to PIL's built-in bitmap font rather than failing.
+
+synthetic:
+  fonts:
+    - /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+    - /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf
+    - /usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf
+    - /usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf
+    - /usr/share/fonts/truetype/liberation/LiberationSans-Italic.ttf
+    - /usr/share/fonts/truetype/liberation/LiberationSerif-Italic.ttf
+    - /usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf
+    - /usr/share/fonts/truetype/ubuntu/Ubuntu-RI.ttf
+  font_sizes: [28, 36, 48]
+  image_height: 64
+  samples_per_item: 6
+  split_ratios:
+    train: 0.8
+    val: 0.1
+    test: 0.1
+  # Every character in this pool (digits, upper/lower letters, punctuation) is
+  # also rendered in isolation, which already covers the single-character
+  # confusable classes from docs/ROADMAP.md Phase 4 (0/O, 1/l/I, 5/S, 2/Z, 8/B,
+  # 6/G, 9/g, O/Q, C/G).
+  characters: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.,:;'\"*_-"
+  # Real words chosen to stress the multi-character confusable patterns (rn/m,
+  # cl/d, vv/w) alongside general-coverage common words.
+  words:
+    - turn
+    - corner
+    - modern
+    - burn
+    - learn
+    - arm
+    - term
+    - warm
+    - harm
+    - click
+    - clean
+    - close
+    - cloud
+    - door
+    - deer
+    - date
+    - savvy
+    - saw
+    - wow
+    - the
+    - and
+    - hello
+    - world
+    - handwriting
+    - recognition
+    - number
+    - letter
+    - Illinois
+    - million
+    - closed
+    - vulnerable
+    - Google
+    - Bob
+    - Sam
+    - Zoo
+    - Glass
+    - Queen
+
+mnist:
+  base_url: "https://ossci-datasets.s3.amazonaws.com/mnist/"
+  train_images: "train-images-idx3-ubyte.gz"
+  train_labels: "train-labels-idx1-ubyte.gz"
+  test_images: "t10k-images-idx3-ubyte.gz"
+  test_labels: "t10k-labels-idx1-ubyte.gz"
+
+emnist:
+  archive_url: "https://biometrics.nist.gov/cs_links/EMNIST/gzip.zip"
+  split: "byclass"
