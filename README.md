@@ -75,7 +75,7 @@ recognition/         TrOCR-based recognition pipeline (image -> text + confidenc
 scripts/             prepare_dataset.py and other operational scripts
 segmentation/        Line/word/character segmentation
 tests/               Unit, integration, and GUI tests
-training/            Training loops, dataset adapters, evaluation (later phase)
+training/            Fine-tuning loop, dataset adapter, evaluation, confusion analysis, hard-negative mining
 weights/             Model checkpoints (not committed; see .gitignore)
 ```
 
@@ -99,6 +99,25 @@ uv run python scripts/prepare_dataset.py cvl          # requires manual download
 
 Each run writes normalized images under `datasets/processed/<name>/` and a manifest at
 `datasets/manifests/<name>.jsonl` (see `datasets/manifest.py`).
+
+## Fine-tuning (Phase 4)
+
+```bash
+uv sync --extra gui --extra dev --extra cv --extra ml --extra log   # adds tensorboard
+
+uv run python scripts/prepare_dataset.py mnist --limit 400   # or any other manifest
+uv run python scripts/prepare_dataset.py synthetic
+uv run python -m training.train   # reads configs/training.yaml
+
+# After training, find what the model confuses and feed it back in:
+uv run python scripts/analyze_confusions.py synthetic --split test
+# then set configs/training.yaml: confusion_matrix_path to the saved
+# experiments/confusion_matrix_<name>.json and rerun training.
+```
+
+Checkpoints land under `weights/<checkpoint_dir>/step-<N>/`, never overwritten — training
+auto-resumes from the latest one unless `resume: false` in the config. Loss curves go to
+TensorBoard, CSV, and JSONL simultaneously under `logs/tensorboard/<run_name>/`.
 
 ## Evaluating recognition
 

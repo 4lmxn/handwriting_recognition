@@ -123,15 +123,56 @@ None of these block Phase 3.
 - 114 tests total (up from 91), all mocking the heavy model in GUI/unit tests — nothing
   in the automated suite downloads a model or requires network. `ruff`/`mypy` clean.
 
-## Phase 4 — Fine-tuning, confusion analysis, hard-negative mining
+## Phase 4 — Fine-tuning, confusion analysis, hard-negative mining ✅ (core infra complete)
 
-- Fine-tuning loop on CPU-appropriate batch sizes with checkpointing and resume.
-- TensorBoard + CSV/JSON logging of loss/accuracy curves.
-- Confusion matrix generation after every training run; automated analysis of commonly
-  confused classes (0/O, 1/l/I, 5/S, 2/Z, 8/B, 6/G, 9/g, rn/m, cl/d, vv/w, O/Q, C/G,
-  punctuation).
-- Hard-negative mining: oversample/re-augment frequently-confused classes in subsequent
-  training rounds.
+- Fine-tuning loop (`training/train.py`, config in `configs/training.yaml` /
+  `training/config.py`): loads TrOCR-small (or a checkpoint, if resuming), fine-tunes on
+  any combination of manifests/splits, checkpoints every `save_every_n_steps` under
+  `weights/<checkpoint_dir>/step-<N>/` (never overwritten in place) plus a final save.
+  Required setting `model.config.decoder_start_token_id` /
+  `pad_token_id` explicitly — `VisionEncoderDecoderModel` doesn't infer these for loss
+  computation, a real bug caught by actually running training, not just unit tests.
+  **Verified for real**: ran two sequential training passes on 200 synthetic+MNIST
+  samples (batch size 4) — loss dropped ~4.9 → ~1.0–1.6 over 50 steps in run 1; run 2
+  correctly resumed from `step-50` (no "newly initialized" warning, confirming real
+  weights loaded) and continued to `step-100` without resetting the step counter or
+  duplicating log rows. Known simplification: only model+processor are checkpointed, not
+  optimizer state, so resume restarts Adam's momentum — documented in `train.py`, not
+  hidden.
+- `training/dataset.py`: wraps the Phase 2 manifest format as a PyTorch `Dataset`,
+  applying the Phase 2 augmentation pipeline on the fly per `__getitem__` call (not
+  baked into stored images), with `-100`-masked padding for the loss.
+- `training/logging_utils.py`: `TrainingLogger` writes every scalar to TensorBoard, a
+  CSV, and a JSONL file simultaneously — CSV/JSONL never depend on TensorBoard
+  succeeding (wrapped in its own try/except). Added the `log` dependency group
+  (`tensorboard`) to the synced extras.
+- `training/confusion_matrix.py`: full Levenshtein *alignment* (not just distance) to
+  attribute substitutions to specific (reference-char, hypothesis-char) pairs;
+  `analyze_ambiguous_classes` reports the single-character pairs from this phase's
+  original bullet list (0/O, 1/l, 1/I, 5/S, 2/Z, 8/B, 6/G, 9/g, O/Q, C/G). Multi-character
+  pairs (rn/m, cl/d, vv/w) are **not** covered — a character-aligned matrix can't express
+  a 2-char-vs-1-char substitution; that needs substring alignment, an explicitly
+  documented gap for a future iteration, not silently dropped.
+- `training/hard_negative_mining.py` + `scripts/analyze_confusions.py`: the latter runs
+  the recognizer over a manifest split and saves a real confusion matrix to
+  `experiments/`; the former oversamples training samples containing frequently-confused
+  characters. **Verified for real**, not just unit-tested: ran `analyze_confusions.py`
+  against 40 real synthetic character samples, then fed that matrix into a training run
+  with `hard_negative_min_count=1` — it correctly identified 26 flagged classes and
+  oversampled 60 → 135 training samples before training proceeded. With the default
+  `min_count=3` and this little data, no pairs currently cross the threshold (too few
+  samples for repeated confusions) — that's correct behavior given the data, not a bug;
+  the mechanism is proven, its usefulness will show once real handwriting data (IAM/CVL)
+  feeds larger evaluation runs.
+- 150 tests total (up from 114). GUI/unit tests never load the real model (mocked); the
+  training/confusion/logging pieces above were additionally validated with real runs
+  documented above, beyond what's captured in the automated suite. `ruff`/`mypy` clean
+  across 44 source files.
+- Remaining before calling this phase fully done: nothing blocking, but the "core infra
+  complete" qualifier is there because the hard-negative loop hasn't yet been exercised
+  against real handwriting data (needs IAM/CVL), and no accuracy comparison (before vs.
+  after fine-tuning, or before vs. after hard-negative mining) has been formally run —
+  worth doing once more real data is available.
 
 ## Phase 5 — Feedback loop & personalization (continual learning)
 

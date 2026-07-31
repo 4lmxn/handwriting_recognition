@@ -1,0 +1,26 @@
+# Phase 4 fine-tuning. Starts from configs/recognition.yaml's model_name and
+# fine-tunes on whatever manifests/splits are listed below (see
+# datasets/manifests/ — run scripts/prepare_dataset.py to generate more).
+model_name: "microsoft/trocr-small-handwritten"
+device: "auto"
+batch_size: 4
+num_epochs: 1
+learning_rate: 0.00005
+max_target_length: 32
+checkpoint_dir: "weights/trocr-finetuned"
+log_dir: "logs/tensorboard"
+run_name: "phase4-finetune"
+manifests: ["synthetic", "mnist"]
+splits: ["train"]
+resume: true
+save_every_n_steps: 50
+seed: 42
+augment: true
+max_samples: null # cap total training samples for a quick run; null = use all
+
+# Hard-negative mining (see training/hard_negative_mining.py). Point this at
+# a confusion matrix produced by scripts/analyze_confusions.py to oversample
+# the characters it flagged as frequently confused, in the next training run.
+confusion_matrix_path: null
+hard_negative_min_count: 3
+hard_negative_oversample_factor: 3
