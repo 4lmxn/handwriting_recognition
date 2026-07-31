@@ -15,3 +15,24 @@
 model_name: "weights/trocr-cvl-hn/step-6934"
 device: "auto" # auto | cpu | cuda
 max_new_tokens: 32
+
+# Generation-time repetition guards. The Phase 4 HN-mined fine-tune still
+# occasionally produces trailing-character repetition ("Triangles" ->
+# "Trianglesssss") on hard inputs — a milder residue of the plain fine-tune's
+# 32-token runaway degeneracy. no_repeat_ngram_size hard-forbids any n-gram
+# from occurring twice; N=3 (not 2) preserves legitimate words with a repeated
+# bigram (e.g. "onion" = o,n,i,o,n contains the bigram (o,n) twice; "banana"
+# contains (a,n) twice) while still stopping the runaway after at most three
+# repetitions. On a 500-sample CVL test slice, ngram=3 alone reduced CER
+# 0.314 → 0.286 with no exact-match regression — a strict Pareto win over no
+# guards. See docs/ROADMAP.md Phase 4.
+#
+# repetition_penalty softly downweights already-generated tokens (paper
+# 1909.05858) but was empirically net-negative here: at 1.2 it flipped some
+# previously-correct outputs (e.g. "Imagine" → "Imagines") and regressed
+# exact-match from 0.646 → 0.608. Left at 1.0 (disabled) as the committed
+# default; kept as a config field so it can be tuned per-model if a future
+# checkpoint has different degeneracy characteristics. Set no_repeat_ngram_size
+# to 0 to also disable that guard and match transformers defaults.
+repetition_penalty: 1.0
+no_repeat_ngram_size: 3

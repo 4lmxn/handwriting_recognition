@@ -24,9 +24,18 @@ class RecognitionResult:
 
 
 class Recognizer:
-    def __init__(self, model_name: str, device: str = "cpu", max_new_tokens: int = 32) -> None:
+    def __init__(
+        self,
+        model_name: str,
+        device: str = "cpu",
+        max_new_tokens: int = 32,
+        repetition_penalty: float = 1.0,
+        no_repeat_ngram_size: int = 0,
+    ) -> None:
         self._device = device
         self._max_new_tokens = max_new_tokens
+        self._repetition_penalty = repetition_penalty
+        self._no_repeat_ngram_size = no_repeat_ngram_size
         self._processor = TrOCRProcessor.from_pretrained(model_name)
         self._model = VisionEncoderDecoderModel.from_pretrained(model_name)
         self._model.to(device)
@@ -41,6 +50,8 @@ class Recognizer:
             output = self._model.generate(
                 pixel_values,
                 max_new_tokens=self._max_new_tokens,
+                repetition_penalty=self._repetition_penalty,
+                no_repeat_ngram_size=self._no_repeat_ngram_size,
                 output_scores=True,
                 return_dict_in_generate=True,
             )

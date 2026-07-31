@@ -164,6 +164,8 @@ class DrawingCanvasTab(QWidget):
                     recognition_config.model_name,
                     device=recognition_config.resolved_device(),
                     max_new_tokens=recognition_config.max_new_tokens,
+                    repetition_penalty=recognition_config.repetition_penalty,
+                    no_repeat_ngram_size=recognition_config.no_repeat_ngram_size,
                 )
             image = self._canvas_to_grayscale_array()
             result = self._recognizer.recognize(image)

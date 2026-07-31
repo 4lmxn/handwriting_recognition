@@ -195,9 +195,20 @@ None of these block Phase 3.
   result: HN mining beats the pretrained baseline on all five metrics.
   `configs/recognition.yaml: model_name` now points at the HN-mined checkpoint
   (`weights/trocr-cvl-hn/step-6934`); the weights themselves are gitignored — reproduce
-  by re-running `uv run python -m training.train` after preparing CVL. The remaining
-  trailing-char repetition is a candidate for an inference-time
-  `no_repeat_ngram_size` fix (not applied yet — deferred as a Phase 4.5 followup).
+  by re-running `uv run python -m training.train` after preparing CVL.
+- **Inference-time repetition guard** (added same session): the trailing-char
+  repetition (`Trianglesssss`) that survived HN mining is a token-level n-gram
+  runaway, cleanly suppressible at generation time. Added `repetition_penalty` and
+  `no_repeat_ngram_size` fields to `RecognitionConfig`, passed them through
+  `Recognizer.generate()`, and empirically tuned on the same 500-sample CVL slice:
+  N=3 chosen over N=2 to preserve legitimate words with a repeated bigram (`onion`,
+  `banana`). `repetition_penalty` tested at 1.2 and found net-negative — flipped
+  correct outputs (`Imagine` → `Imagines`) and regressed exact-match 0.646 → 0.608 —
+  so left at 1.0 (disabled) as the committed default, with the field retained for
+  per-model tuning. `no_repeat_ngram_size=3` alone: **CER 0.314 → 0.286, char_acc
+  0.715 → 0.725, exact-match unchanged at 0.646** — a strict Pareto win over no
+  guards. Final ship state: HN-mined checkpoint + ngram guard → CER 0.286
+  vs baseline 0.482 (−41%), exact-match 0.646 vs baseline 0.376 (+27pp).
 
 ## Phase 5 — Feedback loop & personalization (continual learning)
 
