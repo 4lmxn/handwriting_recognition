@@ -7,10 +7,10 @@ batch_size: 4
 num_epochs: 1
 learning_rate: 0.00005
 max_target_length: 32
-checkpoint_dir: "weights/trocr-finetuned"
+checkpoint_dir: "weights/trocr-cvl-hn"
 log_dir: "logs/tensorboard"
-run_name: "phase4-finetune"
-manifests: ["synthetic", "mnist"]
+run_name: "phase4-cvl-hn-1epoch"
+manifests: ["cvl"]
 splits: ["train"]
 resume: true
 save_every_n_steps: 50
@@ -26,6 +26,6 @@ max_samples: null # cap total training samples for a quick run; null = use all
 # Hard-negative mining (see training/hard_negative_mining.py). Point this at
 # a confusion matrix produced by scripts/analyze_confusions.py to oversample
 # the characters it flagged as frequently confused, in the next training run.
-confusion_matrix_path: null
-hard_negative_min_count: 3
+confusion_matrix_path: "experiments/confusion_matrix_cvl.json"
+hard_negative_min_count: 10
 hard_negative_oversample_factor: 3

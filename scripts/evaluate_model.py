@@ -33,6 +33,13 @@ def main() -> None:
     )
     parser.add_argument("--split", default="test", choices=["train", "val", "test"])
     parser.add_argument("--limit", type=int, default=100, help="Max samples to evaluate")
+    parser.add_argument(
+        "--model-name",
+        default=None,
+        help="Override recognition_config.model_name — HF hub id OR path to a "
+        "local fine-tuned checkpoint (e.g. weights/trocr-cvl/step-2675). Lets you "
+        "evaluate a fine-tuned run against the same manifest as the baseline.",
+    )
     args = parser.parse_args()
 
     app_config = load_config()
@@ -44,8 +51,10 @@ def main() -> None:
         raise ValueError(f"No '{args.split}' samples found in {manifest_path}")
 
     recognition_config = load_recognition_config()
+    model_name = args.model_name or recognition_config.model_name
+    logger.info("Loading recognizer from %s", model_name)
     recognizer = Recognizer(
-        recognition_config.model_name,
+        model_name,
         device=recognition_config.resolved_device(),
         max_new_tokens=recognition_config.max_new_tokens,
     )

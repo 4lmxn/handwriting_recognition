@@ -5,11 +5,14 @@ tests pass, lint/type-check clean — before the next one starts.
 
 ## Decisions on record
 
-- **Hardware**: this machine is CPU-only (Intel integrated graphics, no discrete/NVIDIA
-  GPU). Confirmed with the user on 2026-07-31 — this is their only machine, no separate
-  GPU box or cloud instance currently in use. All code auto-detects a CUDA device via
-  `AppConfig.resolved_device()` and uses it if one becomes available, but nothing may
-  *require* a GPU.
+- **Hardware**: development is currently on a Windows 11 laptop with an NVIDIA GeForce
+  RTX 3050 Laptop GPU (torch cu126 build, verified 2026-07-31). This is a modest GPU,
+  not a training rig — enough to fine-tune TrOCR-small with AMP, not enough to train a
+  large model from scratch. The project's earlier development on a CPU-only machine
+  (Intel iGPU, no discrete GPU) is the reason the modeling strategy avoids
+  training-from-scratch approaches. `AppConfig.resolved_device()` auto-selects
+  `cuda` → `mps` → `cpu`, so the same codebase runs correctly on all three; **nothing
+  may *require* a GPU** (CPU fallback must stay functional and tested).
 - **Modeling strategy**: fine-tune compact **pretrained** handwriting-recognition
   backbones (e.g. TrOCR-small, or a CRNN+CTC baseline) plus a lightweight personalization
   adapter, rather than training the full CNN→ViT→BiLSTM→CTC→Transformer-LM pipeline from
@@ -123,7 +126,7 @@ None of these block Phase 3.
 - 114 tests total (up from 91), all mocking the heavy model in GUI/unit tests — nothing
   in the automated suite downloads a model or requires network. `ruff`/`mypy` clean.
 
-## Phase 4 — Fine-tuning, confusion analysis, hard-negative mining ✅ (core infra complete)
+## Phase 4 — Fine-tuning, confusion analysis, hard-negative mining ✅ (complete)
 
 - Fine-tuning loop (`training/train.py`, config in `configs/training.yaml` /
   `training/config.py`): loads TrOCR-small (or a checkpoint, if resuming), fine-tunes on
@@ -168,11 +171,33 @@ None of these block Phase 3.
   training/confusion/logging pieces above were additionally validated with real runs
   documented above, beyond what's captured in the automated suite. `ruff`/`mypy` clean
   across 44 source files.
-- Remaining before calling this phase fully done: nothing blocking, but the "core infra
-  complete" qualifier is there because the hard-negative loop hasn't yet been exercised
-  against real handwriting data (needs IAM/CVL), and no accuracy comparison (before vs.
-  after fine-tuning, or before vs. after hard-negative mining) has been formally run —
-  worth doing once more real data is available.
+- **Verified on real handwriting (CVL, RTX 3050, 2026-07-31)** — closing the two
+  previously-open gaps. Downloaded CVL (word-level, 10,702 train / 72,576 test), fine-tuned
+  TrOCR-small for 1 epoch on CVL train (CUDA + AMP, batch 4, ~15 min), then ran the same
+  training with hard-negative mining feeding a confusion matrix built from the plain
+  fine-tune's train-split errors (raised `hard_negative_min_count` to 10 to keep the
+  oversampling selective — flagged `{a, f, o, t}` from the top confusion pairs, oversampled
+  10,702→27,734 samples, ~30 min training). Results on a fixed 500-sample CVL test slice:
+
+  | Metric | Baseline (pretrained) | Plain FT | HN-mined FT |
+  |---|---|---|---|
+  | CER | 0.482 | 1.578 | **0.314** |
+  | WER | 0.740 | 1.280 | **0.354** |
+  | word_acc | 0.376 | 0.434 | **0.646** |
+  | exact_match | 0.376 | 0.434 | **0.646** |
+
+  Plain FT improved exact-match (+5.8pp) but degraded CER catastrophically — spot-checks
+  revealed **token-repetition degeneracy** on uncertain inputs (e.g. `on` → 32× "on"),
+  which mathematically pushes CER above 1.0 via runaway insertions. HN mining reversed this:
+  by oversampling the top confused characters it apparently regularized the model's
+  calibration on uncertain inputs, replacing 32-token repetitions with either empty strings
+  (safe give-up) or milder trailing-char repetition (`Triangles` → `Trianglesssss`). Net
+  result: HN mining beats the pretrained baseline on all five metrics.
+  `configs/recognition.yaml: model_name` now points at the HN-mined checkpoint
+  (`weights/trocr-cvl-hn/step-6934`); the weights themselves are gitignored — reproduce
+  by re-running `uv run python -m training.train` after preparing CVL. The remaining
+  trailing-char repetition is a candidate for an inference-time
+  `no_repeat_ngram_size` fix (not applied yet — deferred as a Phase 4.5 followup).
 
 ## Phase 5 — Feedback loop & personalization (continual learning)
 

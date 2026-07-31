@@ -38,6 +38,13 @@ def main() -> None:
     parser.add_argument(
         "--min-count", type=int, default=3, help="Threshold for hard_negative_classes"
     )
+    parser.add_argument(
+        "--model-name",
+        default=None,
+        help="Override recognition_config.model_name — HF hub id OR path to a "
+        "local fine-tuned checkpoint (e.g. weights/trocr-cvl/step-2675). Lets "
+        "you build the confusion matrix from a specific fine-tuned run.",
+    )
     args = parser.parse_args()
 
     app_config = load_config()
@@ -53,8 +60,10 @@ def main() -> None:
         raise ValueError(f"No matching samples found in {manifest_path}")
 
     recognition_config = load_recognition_config()
+    model_name = args.model_name or recognition_config.model_name
+    logger.info("Loading recognizer from %s", model_name)
     recognizer = Recognizer(
-        recognition_config.model_name,
+        model_name,
         device=recognition_config.resolved_device(),
         max_new_tokens=recognition_config.max_new_tokens,
     )

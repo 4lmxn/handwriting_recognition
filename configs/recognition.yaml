@@ -1,9 +1,17 @@
 # Baseline recognition model — see docs/ROADMAP.md Phase 3. TrOCR-small was
 # chosen over training a CRNN+CTC baseline from scratch: this project's
 # modeling strategy (see ROADMAP "Decisions on record") is to fine-tune a
-# pretrained backbone rather than train one from scratch on CPU-only hardware,
-# and TrOCR-small-handwritten is already pretrained specifically for
-# handwriting recognition, unlike an untrained CRNN.
-model_name: "microsoft/trocr-small-handwritten"
+# pretrained backbone rather than train one from scratch on modest local
+# hardware, and TrOCR-small-handwritten is already pretrained specifically
+# for handwriting recognition, unlike an untrained CRNN.
+# model_name accepts either a HuggingFace hub id OR a path to a local
+# fine-tuned checkpoint (produced by training/train.py). The default below
+# points at the Phase 4 hard-negative-mined CVL fine-tune, which beat the
+# pretrained baseline on all five metrics on a 500-sample CVL test slice
+# (CER 0.482→0.314, WER 0.740→0.354, exact-match 0.376→0.646) — see the
+# ROADMAP Phase 4 section. On a fresh clone the weights/ dir is gitignored,
+# so to reproduce you either re-run `uv run python -m training.train` with
+# CVL prepared, or switch model_name back to "microsoft/trocr-small-handwritten".
+model_name: "weights/trocr-cvl-hn/step-6934"
 device: "auto" # auto | cpu | cuda
 max_new_tokens: 32

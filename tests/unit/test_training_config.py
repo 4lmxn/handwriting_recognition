@@ -20,13 +20,24 @@ def test_checkpoint_and_log_dir_paths_are_absolute():
     assert config.log_dir_path.is_absolute()
 
 
-def test_confusion_matrix_full_path_is_none_by_default():
+def test_confusion_matrix_full_path_matches_configured_default():
+    # The committed default now points at the Phase 4 hard-negative-mining
+    # confusion matrix built from the CVL fine-tune — see docs/ROADMAP.md.
     config = load_training_config()
-    assert config.confusion_matrix_path is None
+    assert config.confusion_matrix_path == "experiments/confusion_matrix_cvl.json"
+    assert config.confusion_matrix_full_path is not None
+    assert config.confusion_matrix_full_path.is_absolute()
+    assert config.confusion_matrix_full_path.name == "confusion_matrix_cvl.json"
+
+
+def test_confusion_matrix_full_path_is_none_when_unset():
+    from dataclasses import replace
+
+    config = replace(load_training_config(), confusion_matrix_path=None)
     assert config.confusion_matrix_full_path is None
 
 
-def test_confusion_matrix_full_path_resolves_when_set():
+def test_confusion_matrix_full_path_resolves_arbitrary_paths():
     from dataclasses import replace
 
     config = replace(load_training_config(), confusion_matrix_path="experiments/foo.json")
