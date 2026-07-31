@@ -34,6 +34,10 @@ ml = [
     "sentencepiece>=0.2",
     "protobuf>=4.25",
     "torchmetrics>=1.4",
+    # Phase 5: LoRA-style personalization adapters layered on the frozen
+    # fine-tuned backbone. peft handles the low-rank matrix insertion and
+    # provides a stable save/load format via PeftModel.from_pretrained.
+    "peft>=0.11",
 ]
 
 # Phase 10: ONNX export/quantization — separate so it doesn't block earlier

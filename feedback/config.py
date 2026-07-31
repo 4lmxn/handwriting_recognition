@@ -6,12 +6,15 @@ from pathlib import Path
 import yaml
 
 from app.config import CONFIGS_DIR, REPO_ROOT
+from models.adapters.config import LoraAdapterConfig
 
 
 @dataclass(frozen=True)
 class FeedbackConfig:
     storage_dir: str
     image_dir: str
+    adapter: LoraAdapterConfig
+    adapter_dir: str
 
     @property
     def storage_dir_path(self) -> Path:
@@ -21,9 +24,18 @@ class FeedbackConfig:
     def image_dir_path(self) -> Path:
         return REPO_ROOT / self.image_dir
 
+    @property
+    def adapter_dir_path(self) -> Path:
+        return REPO_ROOT / self.adapter_dir
+
 
 def load_feedback_config() -> FeedbackConfig:
     path = CONFIGS_DIR / "feedback.yaml"
     with open(path) as f:
         data = yaml.safe_load(f)
-    return FeedbackConfig(**data)
+    return FeedbackConfig(
+        storage_dir=data["storage_dir"],
+        image_dir=data["image_dir"],
+        adapter=LoraAdapterConfig.from_dict(data.get("adapter", {})),
+        adapter_dir=data["adapter_dir"],
+    )

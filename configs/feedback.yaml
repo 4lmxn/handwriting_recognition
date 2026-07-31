@@ -16,3 +16,22 @@
 # online — see docs/ROADMAP.md Phase 5.
 storage_dir: "feedback"
 image_dir: "datasets/processed/feedback"
+
+# LoRA adapter (Phase 5, PR 2). Layered on the frozen fine-tuned backbone
+# — base weights are never modified. Defaults intentionally conservative:
+# r=4 (low capacity, resists overfitting) + target_modules=["v_proj"]
+# alone. TrOCR's ViT encoder uses "value" (not "v_proj") in attention
+# submodule names, so this list naturally matches only the decoder without
+# needing a regex. See docs/ROADMAP.md Phase 5 for the rationale
+# (calibration drift observed in Phase 4 plain FT — see that section).
+adapter:
+  r: 4
+  alpha: 8
+  dropout: 0.05
+  target_modules: ["v_proj"]
+  bias: "none"
+
+# Where trained adapter versions accumulate. Never overwritten in place —
+# each incremental update writes a new dir under adapter_dir, so a bad
+# adapter can be rolled back by pointing at an earlier version.
+adapter_dir: "weights/adapters"
