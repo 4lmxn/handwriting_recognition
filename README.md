@@ -90,10 +90,10 @@ configs/             YAML configuration (paths, app, datasets, augmentation, mod
 datasets/            Manifest schema, dataset registry, dataset sources; raw/processed data (not committed)
 docs/                Documentation, including the phase-by-phase ROADMAP
 experiments/         Training run outputs, kept out of git
-feedback/            User-correction storage and incremental training scheduling (later phase)
+feedback/            User-correction storage (Phase 5) + configs/feedback.yaml
 language_model/      Language-model-assisted decoding and correction (later phase)
 logs/                Application and training logs (not committed)
-models/              Model backbones and personalization adapters (later phase)
+models/              LoRA personalization adapters (Phase 5) + adapter path resolver
 outputs/             Inference outputs (not committed)
 preprocessing/       Image preprocessing (deskew, denoise, normalization) + augmentation pipeline
 recognition/         TrOCR-based recognition pipeline (image -> text + confidence)
@@ -153,3 +153,34 @@ uv run python scripts/evaluate_model.py synthetic --split test --limit 100
 Reports CER/WER/character/word accuracy against any prepared dataset's manifest. The
 `synthetic` dataset is printed text, not real handwriting — useful as a pipeline smoke
 test, not a substitute for evaluating against IAM/CVL.
+
+## Personalization (Phase 5)
+
+The recognizer improves from your corrections without ever overwriting the base model.
+
+1. In the drawing tab, draw something and click **Recognize**.
+2. If the prediction is wrong, click **Correct…**, edit the transcript, save. The
+   image + prediction + your correction lands in `feedback/corrections.jsonl` and
+   `datasets/processed/feedback/`.
+3. When you've accumulated at least `replay.min_pending_corrections` corrections
+   (default 5), run an incremental update:
+
+   ```bash
+   uv run python scripts/run_incremental_update.py
+   ```
+
+   This trains a fresh LoRA adapter on top of the Phase 4 backbone, evaluates it
+   against a held-out CVL slice, and only keeps it if the CER regression stays under
+   `eval.max_cer_regression` (default 0.02). Rejected adapters are saved with a
+   `-REJECTED` suffix and their corrections stay pending for the next attempt.
+
+4. To have the app pick up the newest accepted adapter automatically, set
+   `configs/recognition.yaml`:
+
+   ```yaml
+   adapter_path: "latest"   # or a literal weights/adapters/v-... path to pin a version
+   ```
+
+Everything under `weights/adapters/` is versioned and never overwritten — rolling
+back is a one-line config change. See `docs/ROADMAP.md` Phase 5 for the design
+rationale (regression gate, replay buffer, why the adapter targets `v_proj` only).

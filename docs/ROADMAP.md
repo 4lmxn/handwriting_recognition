@@ -210,16 +210,56 @@ None of these block Phase 3.
   guards. Final ship state: HN-mined checkpoint + ngram guard → CER 0.286
   vs baseline 0.482 (−41%), exact-match 0.646 vs baseline 0.376 (+27pp).
 
-## Phase 5 — Feedback loop & personalization (continual learning)
+## Phase 5 — Feedback loop & personalization (continual learning) ✅
 
-- Correction UI: user edits a wrong prediction; corrected pairs are stored under
-  `feedback/`.
-- A **personalization adapter** (LoRA-style, layered on the frozen fine-tuned backbone)
-  is incrementally updated from corrections — the base model is never overwritten.
-- Replay buffer mixing original training data with new corrections to avoid catastrophic
-  forgetting.
-- Versioned checkpoints; before/after accuracy logged per incremental update so
-  regressions are visible immediately.
+**Complete.** End-to-end continual-learning loop live: user corrects a
+misrecognition in the drawing canvas, the corrected pair is persisted,
+and a subsequent incremental run layers a personalization adapter on the
+frozen Phase 4 backbone — never overwriting base weights, with a
+regression gate rejecting any update that regresses CER.
+
+**Shipped:**
+
+- `FeedbackStore` (JSONL under `feedback/`, PNGs under
+  `datasets/processed/feedback/`) — stores corrections as
+  manifest-compatible `DatasetSample`s so the incremental loop reuses
+  `HandwritingDataset` with zero branching.
+- LoRA adapter (`models/adapters/`): peft, `r=4`, `target_modules=["v_proj"]`
+  — naturally targets the TrOCR decoder only. Base stays frozen; adapters
+  layered on top and saved as `weights/adapters/v-<epoch>-<uuid>/`,
+  never overwritten.
+- Incremental training loop (`training/incremental.py`): pending
+  corrections → base + adapter load → before-eval → replay-buffered
+  training (70% base / 30% corrections, capped at 200 historical
+  corrections) → after-eval → **regression gate**
+  (`max_cer_regression=0.02`). Rejected adapters get a `-REJECTED` suffix
+  and are excluded from `find_latest_adapter` so a bad increment cannot
+  poison the next one. Only accepted adapters call `mark_applied` on the
+  store — rejected corrections retry on the next run.
+- Correction UI in the drawing tab: "Correct…" button opens a small
+  dialog with the model's prediction + confidence and an editable
+  transcript field; on save the image + prediction + corrected pair goes
+  straight into `FeedbackStore`.
+- `configs/recognition.yaml: adapter_path` — accepts `null`, `"latest"`
+  (auto-resolves to the newest accepted version and silently falls back
+  to `null` if none exist), or a literal path. The runtime `Recognizer`
+  wraps the base with the resolved adapter automatically.
+
+Design notes worth preserving:
+
+- **Why the regression gate matters:** Phase 4's plain fine-tune
+  regressed CER catastrophically before hard-negative mining rescued it;
+  personalization on a stream of corrections is far more susceptible to
+  that same drift. Gating with a small max regression (0.02) is cheap
+  insurance against a single bad batch of corrections poisoning
+  everything downstream.
+- **Why replay-all + cap-200:** the alternative (only-new corrections)
+  had the adapter overfit to whatever the user corrected most recently.
+  Replaying the full history each run stabilizes the adapter's
+  personalization signal; cap-200 keeps compute bounded as the pool
+  grows.
+- **Why version dirs are never overwritten:** rollback to a previous
+  adapter is a `configs/recognition.yaml` one-line change.
 
 ## Phase 6 — Document & upload pipeline
 
