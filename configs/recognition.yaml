@@ -36,3 +36,16 @@ max_new_tokens: 32
 # to 0 to also disable that guard and match transformers defaults.
 repetition_penalty: 1.0
 no_repeat_ngram_size: 3
+
+# Personalization adapter (Phase 5, PR 5). Layers a per-user LoRA on top of
+# the base model_name above, without modifying base weights. Accepts:
+#   null      -> no adapter, run plain base model (default; the fresh-install
+#                behavior).
+#   "latest"  -> auto-resolve to the newest accepted adapter dir under
+#                configs/feedback.yaml's adapter_dir. Silently falls back to
+#                null if none exist yet, so a clone with no corrections still
+#                recognizes. Recommended once the feedback loop is running.
+#   <path>    -> literal path to an adapter dir (relative to repo root or
+#                absolute) — pin a specific version for A/B or rollback.
+# See docs/ROADMAP.md Phase 5 and models/adapters/resolver.py.
+adapter_path: null

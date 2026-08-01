@@ -31,6 +31,7 @@ from app.gui.widgets.canvas_widget import CanvasWidget
 from app.gui.widgets.correction_dialog import CorrectionDialog
 from feedback.config import load_feedback_config
 from feedback.store import FeedbackStore
+from models.adapters.resolver import resolve_adapter_path
 from recognition.config import load_recognition_config
 from recognition.recognizer import RecognitionResult, Recognizer
 
@@ -180,12 +181,22 @@ class DrawingCanvasTab(QWidget):
         try:
             if self._recognizer is None:
                 recognition_config = load_recognition_config()
+                # Resolve the (optional) personalization adapter here rather
+                # than inside Recognizer so this module owns the coupling
+                # between recognition.yaml and feedback.yaml — Recognizer
+                # itself stays feedback-config-unaware.
+                feedback_config = load_feedback_config()
+                adapter_path = resolve_adapter_path(
+                    recognition_config.adapter_path,
+                    feedback_config.adapter_dir_path,
+                )
                 self._recognizer = Recognizer(
                     recognition_config.model_name,
                     device=recognition_config.resolved_device(),
                     max_new_tokens=recognition_config.max_new_tokens,
                     repetition_penalty=recognition_config.repetition_penalty,
                     no_repeat_ngram_size=recognition_config.no_repeat_ngram_size,
+                    adapter_path=adapter_path,
                 )
             image = self._canvas_to_grayscale_array()
             result = self._recognizer.recognize(image)

@@ -19,6 +19,15 @@ class RecognitionConfig:
     # docs/ROADMAP.md Phase 4 for why they exist.
     repetition_penalty: float = 1.0
     no_repeat_ngram_size: int = 0
+    # Optional LoRA personalization adapter (Phase 5, PR 5). Accepts:
+    #   None / "" -> plain base model, no wrap.
+    #   "latest"  -> auto-resolve to the newest accepted adapter under the
+    #                feedback config's adapter_dir. Silently falls back to
+    #                None if none exist yet, so a fresh install still works.
+    #   <path>    -> literal filesystem path to an adapter dir.
+    # Kept as an opaque string here; call resolve_adapter_path() with the
+    # feedback config's adapter_dir_path to turn it into a concrete Path.
+    adapter_path: str | None = None
 
     def resolved_device(self) -> str:
         return resolve_device(self.device)

@@ -225,6 +225,77 @@ def test_empty_corrected_text_is_ignored(
 
 
 @patch("app.gui.tabs.drawing_canvas_tab.load_feedback_config")
+@patch("app.gui.tabs.drawing_canvas_tab.load_recognition_config")
+@patch("app.gui.tabs.drawing_canvas_tab.Recognizer")
+def test_recognizer_receives_resolved_adapter_path(
+    mock_recognizer_cls, mock_load_recog, mock_load_feedback, qtbot, app_config, tmp_path
+):
+    # recognition.yaml says "latest", feedback.yaml points at an
+    # adapter_dir containing one accepted version — the tab must resolve
+    # that to a concrete Path and pass it into Recognizer.
+    adapter_dir = tmp_path / "adapters"
+    adapter_dir.mkdir()
+    (adapter_dir / "v-1000-a").mkdir()
+
+    rec_cfg = MagicMock()
+    rec_cfg.model_name = "fake-model"
+    rec_cfg.resolved_device.return_value = "cpu"
+    rec_cfg.max_new_tokens = 32
+    rec_cfg.repetition_penalty = 1.0
+    rec_cfg.no_repeat_ngram_size = 3
+    rec_cfg.adapter_path = "latest"
+    mock_load_recog.return_value = rec_cfg
+
+    fb_cfg = MagicMock()
+    fb_cfg.adapter_dir_path = adapter_dir
+    mock_load_feedback.return_value = fb_cfg
+
+    mock_instance = MagicMock()
+    mock_instance.recognize.return_value = RecognitionResult(text="x", confidence=0.5)
+    mock_recognizer_cls.return_value = mock_instance
+
+    tab = _make_tab(qtbot, app_config)
+    _draw_stroke(tab)
+    tab.recognize_button.click()
+
+    mock_recognizer_cls.assert_called_once()
+    kwargs = mock_recognizer_cls.call_args.kwargs
+    assert kwargs["adapter_path"] is not None
+    assert kwargs["adapter_path"].name == "v-1000-a"
+
+
+@patch("app.gui.tabs.drawing_canvas_tab.load_feedback_config")
+@patch("app.gui.tabs.drawing_canvas_tab.load_recognition_config")
+@patch("app.gui.tabs.drawing_canvas_tab.Recognizer")
+def test_recognizer_gets_no_adapter_when_config_is_none(
+    mock_recognizer_cls, mock_load_recog, mock_load_feedback, qtbot, app_config, tmp_path
+):
+    rec_cfg = MagicMock()
+    rec_cfg.model_name = "fake-model"
+    rec_cfg.resolved_device.return_value = "cpu"
+    rec_cfg.max_new_tokens = 32
+    rec_cfg.repetition_penalty = 1.0
+    rec_cfg.no_repeat_ngram_size = 3
+    rec_cfg.adapter_path = None
+    mock_load_recog.return_value = rec_cfg
+
+    fb_cfg = MagicMock()
+    fb_cfg.adapter_dir_path = tmp_path / "adapters"
+    mock_load_feedback.return_value = fb_cfg
+
+    mock_instance = MagicMock()
+    mock_instance.recognize.return_value = RecognitionResult(text="x", confidence=0.5)
+    mock_recognizer_cls.return_value = mock_instance
+
+    tab = _make_tab(qtbot, app_config)
+    _draw_stroke(tab)
+    tab.recognize_button.click()
+
+    kwargs = mock_recognizer_cls.call_args.kwargs
+    assert kwargs["adapter_path"] is None
+
+
+@patch("app.gui.tabs.drawing_canvas_tab.load_feedback_config")
 @patch("app.gui.tabs.drawing_canvas_tab.FeedbackStore")
 def test_feedback_store_error_surfaces_in_status_label(
     mock_store_cls, mock_load_cfg, qtbot, app_config, tmp_path

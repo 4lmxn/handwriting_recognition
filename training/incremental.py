@@ -44,6 +44,7 @@ from datasets.manifest import DatasetSample, read_manifest
 from feedback.config import FeedbackConfig
 from feedback.store import FeedbackStore
 from models.adapters.lora import apply_lora_to_trocr, load_adapter, save_adapter
+from models.adapters.resolver import find_latest_adapter
 from preprocessing.augmentation import build_augmentation_pipeline, load_augmentation_config
 from recognition.config import RecognitionConfig
 from recognition.recognizer import Recognizer
@@ -58,30 +59,6 @@ from training.replay_buffer import build_replay_batch, load_replay_base
 from training.train import amp_enabled_for
 
 logger = logging.getLogger(__name__)
-
-
-def _find_latest_adapter(adapter_dir: Path) -> Path | None:
-    """Newest adapter version by directory name; None if the dir is empty
-    or missing.
-
-    Adapter versions are named `v-<epoch_seconds>-<shortuuid>` (or with
-    a `-REJECTED` suffix). REJECTED versions are skipped — a rejected
-    adapter shouldn't seed the next update, or a single bad increment
-    could poison every future attempt.
-    """
-    if not adapter_dir.exists():
-        return None
-    candidates = [
-        d
-        for d in adapter_dir.iterdir()
-        if d.is_dir() and d.name.startswith("v-") and not d.name.endswith("-REJECTED")
-    ]
-    if not candidates:
-        return None
-    # Directory name after the "v-" prefix starts with an epoch-seconds
-    # integer, so alphabetical sort matches chronological order for the
-    # first ~292 million years.
-    return max(candidates, key=lambda d: d.name)
 
 
 def _make_version_name() -> str:
@@ -201,7 +178,7 @@ def train_adapter_increment(
     base_model.config.decoder_start_token_id = processor.tokenizer.cls_token_id  # type: ignore[attr-defined]
     base_model.config.pad_token_id = processor.tokenizer.pad_token_id  # type: ignore[attr-defined]
 
-    latest_adapter = _find_latest_adapter(feedback_config.adapter_dir_path)
+    latest_adapter = find_latest_adapter(feedback_config.adapter_dir_path)
     if latest_adapter is not None:
         logger.info("Continuing from adapter %s", latest_adapter.name)
         peft_model = load_adapter(base_model, latest_adapter)

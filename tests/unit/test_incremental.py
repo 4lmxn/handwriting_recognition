@@ -25,42 +25,14 @@ from models.adapters.config import LoraAdapterConfig
 from recognition.config import RecognitionConfig
 from training.incremental import (
     _cap_corrections,
-    _find_latest_adapter,
     _make_version_name,
     train_adapter_increment,
 )
 from training.incremental_eval import EvaluationMetrics
 
 # ---------- helper unit tests --------------------------------------------
-
-
-def test_find_latest_adapter_returns_none_for_missing_dir(tmp_path):
-    assert _find_latest_adapter(tmp_path / "does-not-exist") is None
-
-
-def test_find_latest_adapter_returns_none_for_empty_dir(tmp_path):
-    assert _find_latest_adapter(tmp_path) is None
-
-
-def test_find_latest_adapter_picks_newest_by_name(tmp_path):
-    (tmp_path / "v-1000-a").mkdir()
-    (tmp_path / "v-3000-c").mkdir()
-    (tmp_path / "v-2000-b").mkdir()
-    (tmp_path / "unrelated").mkdir()
-    latest = _find_latest_adapter(tmp_path)
-    assert latest is not None
-    assert latest.name == "v-3000-c"
-
-
-def test_find_latest_adapter_skips_rejected_versions(tmp_path):
-    (tmp_path / "v-1000-a").mkdir()
-    (tmp_path / "v-9999-BAD-REJECTED").mkdir()
-    latest = _find_latest_adapter(tmp_path)
-    assert latest is not None
-    # v-9999 is chronologically later but REJECTED — skipped, so v-1000 wins.
-    # A rejected adapter must never seed the next update or a single bad
-    # increment could poison every subsequent one.
-    assert latest.name == "v-1000-a"
+# find_latest_adapter tests moved to tests/unit/test_adapter_resolver.py
+# when the function moved out of training/incremental.py — see that file.
 
 
 def test_make_version_name_format():
