@@ -28,12 +28,17 @@ from PySide6.QtWidgets import (
 
 from app.config import CanvasConfig, PathsConfig
 from app.gui.widgets.canvas_widget import CanvasWidget
+from app.gui.widgets.correction_dialog import CorrectionDialog
+from feedback.config import load_feedback_config
+from feedback.store import FeedbackStore
 from recognition.config import load_recognition_config
-from recognition.recognizer import Recognizer
+from recognition.recognizer import RecognitionResult, Recognizer
 
 _PLACEHOLDER_TEXT = "Draw something and click Recognize."
 _EMPTY_CANVAS_TEXT = "Canvas is empty — draw something first."
 _RECOGNIZING_TEXT = "Recognizing…"
+_CORRECTION_SAVED_TEXT = "Correction saved."
+_CORRECTION_FAILED_TEXT = "Could not save correction: {error}"
 
 
 class DrawingCanvasTab(QWidget):
@@ -44,6 +49,12 @@ class DrawingCanvasTab(QWidget):
         self._paths_config = paths_config
         self._canvas = CanvasWidget(canvas_config)
         self._recognizer: Recognizer | None = None
+        self._feedback_store: FeedbackStore | None = None
+        # Snapshot of the last recognition — what the model saw and what it
+        # returned. Kept so "Correct…" writes the exact image that was
+        # recognized, not whatever the user has drawn on top since.
+        self._last_image: np.ndarray | None = None
+        self._last_result: RecognitionResult | None = None
 
         layout = QVBoxLayout(self)
         layout.addLayout(self._build_toolbar(canvas_config))
@@ -102,6 +113,14 @@ class DrawingCanvasTab(QWidget):
         self._recognize_button.clicked.connect(self._on_recognize)
         toolbar.addWidget(self._recognize_button)
 
+        self._correct_button = QPushButton("Correct…")
+        self._correct_button.clicked.connect(self._on_correct)
+        self._correct_button.setEnabled(False)
+        self._correct_button.setToolTip(
+            "Save a corrected transcript for the last recognition."
+        )
+        toolbar.addWidget(self._correct_button)
+
         return toolbar
 
     def _build_status_bar(self) -> QLabel:
@@ -129,6 +148,7 @@ class DrawingCanvasTab(QWidget):
     def _on_clear(self) -> None:
         self._canvas.clear()
         self._refresh_undo_redo_buttons()
+        self._invalidate_last_recognition()
 
     def _on_undo(self) -> None:
         self._canvas.undo()
@@ -169,14 +189,70 @@ class DrawingCanvasTab(QWidget):
                 )
             image = self._canvas_to_grayscale_array()
             result = self._recognizer.recognize(image)
+            self._last_image = image
+            self._last_result = result
+            self._correct_button.setEnabled(True)
             self._status_label.setText(
                 f"Recognized: {result.text} ({result.confidence:.0%} confidence)"
             )
         finally:
             self._recognize_button.setEnabled(True)
 
+    def _on_correct(self) -> None:
+        if self._last_image is None or self._last_result is None:
+            return
+        dialog = CorrectionDialog(
+            prediction=self._last_result.text,
+            confidence=self._last_result.confidence,
+            parent=self,
+        )
+        if dialog.exec() != CorrectionDialog.DialogCode.Accepted:
+            return
+        corrected = dialog.corrected_text()
+        if not corrected:
+            return
+        self._save_correction(corrected)
+
+    def _save_correction(self, corrected: str) -> None:
+        # Guarded by _on_correct; asserted here so mypy/readers see the
+        # invariant that _last_image / _last_result are populated whenever
+        # this method runs.
+        assert self._last_image is not None and self._last_result is not None
+        try:
+            if self._feedback_store is None:
+                self._feedback_store = self._build_feedback_store()
+            self._feedback_store.add(
+                image=self._last_image,
+                prediction=self._last_result.text,
+                confidence=self._last_result.confidence,
+                corrected=corrected,
+            )
+        except OSError as exc:
+            self._status_label.setText(_CORRECTION_FAILED_TEXT.format(error=exc))
+            return
+        # Correction is single-shot: after saving, the same recognition
+        # can't be corrected twice (would produce duplicate records).
+        self._invalidate_last_recognition()
+        self._status_label.setText(_CORRECTION_SAVED_TEXT)
+
+    def _build_feedback_store(self) -> FeedbackStore:
+        cfg = load_feedback_config()
+        return FeedbackStore(
+            storage_dir=cfg.storage_dir_path,
+            image_dir=cfg.image_dir_path,
+        )
+
+    def _invalidate_last_recognition(self) -> None:
+        self._last_image = None
+        self._last_result = None
+        self._correct_button.setEnabled(False)
+
     def _on_stroke_finished(self) -> None:
         self._refresh_undo_redo_buttons()
+        # A new stroke means the canvas no longer matches what was last
+        # recognized — offering "Correct…" against a stale prediction
+        # would tag the wrong image, so retire it.
+        self._invalidate_last_recognition()
 
     def _refresh_undo_redo_buttons(self) -> None:
         self._undo_button.setEnabled(self._canvas.can_undo())
@@ -200,6 +276,10 @@ class DrawingCanvasTab(QWidget):
     @property
     def recognize_button(self) -> QPushButton:
         return self._recognize_button
+
+    @property
+    def correct_button(self) -> QPushButton:
+        return self._correct_button
 
 
 def qimage_to_grayscale_array(image: QImage) -> np.ndarray:
