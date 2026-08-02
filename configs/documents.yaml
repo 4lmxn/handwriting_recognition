@@ -1,0 +1,21 @@
+# Document upload pipeline (Phase 6). Governs how uploaded images (and
+# later PDFs) are validated before entering the recognition pipeline.
+#
+# allowed_image_extensions: lowercase, leading dot. Anything not in this
+# list is rejected before Pillow gets a chance to open it, so an unknown
+# format can't trip a slow decoder or (worse) hit a decoder CVE. Add new
+# formats deliberately — every entry here must be one Pillow can decode
+# to grayscale.
+#
+# max_image_bytes: hard ceiling checked via os.stat before decode, so a
+# hostile multi-GB "image" can't exhaust memory during PIL.Image.open. 50 MB
+# is generous for scanned handwriting pages (a color 300-DPI Letter scan is
+# ~25 MB uncompressed, far less as PNG/JPEG) — bump it here rather than in
+# code if the app ever gains a legitimate need for huge inputs.
+allowed_image_extensions:
+  - .png
+  - .jpg
+  - .jpeg
+  - .tif
+  - .tiff
+max_image_bytes: 52428800  # 50 MiB
