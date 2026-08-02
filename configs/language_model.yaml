@@ -1,0 +1,27 @@
+# Phase 7 language-model-assisted decoding.
+#
+# The dictionary merges up to three word lists into one vocab used
+# by future rescoring / snap-to-nearest correction PRs. All three
+# paths are optional — a fresh clone typically has neither a user
+# list nor a domain list — and each may be either a .json array of
+# strings OR a plain-text file with one word per line (# comments
+# and blank lines ignored). Paths are repo-relative when relative.
+#
+# Suggested seeds:
+#   base_path   → a general English list (e.g. /usr/share/dict/words
+#                 on Linux, or a word-frequency file you commit under
+#                 datasets/vocabularies/).
+#   user_path   → words the user adds to force-recognize correctly:
+#                 personal names, place names, uncommon terms.
+#   domain_path → jargon for a specific writing context (medical,
+#                 legal, code snippets) — swap this file per project
+#                 without editing the user list.
+dictionary:
+  base_path: null
+  user_path: null
+  domain_path: null
+  # Case-insensitive by default — handwriting output is inherently
+  # case-uncertain (upper vs lower i/l ambiguity, etc.). Flip to true
+  # only if you want proper-noun capitalization preserved through
+  # dictionary lookups.
+  case_sensitive: false
