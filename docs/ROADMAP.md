@@ -261,11 +261,79 @@ Design notes worth preserving:
 - **Why version dirs are never overwritten:** rollback to a previous
   adapter is a `configs/recognition.yaml` one-line change.
 
-## Phase 6 — Document & upload pipeline
+## Phase 6 — Document & upload pipeline ✅
 
-- Image upload (PNG/JPEG/TIFF) and PDF (incl. multi-page) via PyMuPDF.
-- Automatic text-region detection feeding the Phase 2 segmentation pipeline.
-- Batch inference across a full page with structured (line/word) output.
+**Complete.** End-to-end document ingest live: a user opens an image
+or PDF in the new Upload Document tab, the app detects text regions,
+runs recognition over every word, and shows a structured transcript
+next to a word-box overlay on the page — reusing the existing
+segmentation + recognition stack rather than duplicating it.
+
+**Shipped:**
+
+- `documents/loader.py` — image loader (PNG/JPEG/TIFF) that produces
+  the project-standard `(H, W)` uint8 grayscale ndarray, matching the
+  drawing tab and preprocessing conventions so downstream code needs
+  zero per-source branching. Extension allowlist checked before stat,
+  byte cap checked before Pillow decode, typed errors
+  (`UnsupportedImageFormatError` / `ImageTooLargeError` /
+  `InvalidImageError` / `FileNotFoundError`).
+- `documents/pdf_loader.py` — PyMuPDF-backed multi-page renderer at
+  `DocumentsConfig.pdf_render_dpi` in the grayscale colorspace (no
+  RGB→L round trip). Byte cap + page cap gate hostile inputs; Pixmap
+  samples are copied so ndarrays outlive the Pixmap. `pymupdf` lives
+  in its own `pdf` extra so Phase 6 doesn't drag the pandas/scipy/
+  sklearn/matplotlib stack in with it.
+- `documents/layout.py` — `analyze_page(page, config)` composes
+  `adaptive_threshold` + optional `deskew` + `segment_lines` +
+  `segment_words` into a single "raw page → PageLayout" step. When
+  deskew is on, both the binary (for segmentation) and grayscale
+  (returned as `working_page`) are rotated by the same estimated
+  angle so word crops line up with reported coordinates.
+- `documents/inference.py` — `recognize_page(working_page, layout,
+  recognizer)` walks every `WordBox`, cropping and calling the
+  Recognizer, returning a `PageResult(lines=[RecognizedLine(words=
+  [RecognizedWord(text, confidence, box)])])` tree with `.text`
+  accessors for the "just give me the transcript" caller.
+- `app/gui/tabs/upload_document_tab.py` + `PagePreviewWidget` — Open
+  → paging → Recognize wired to the four modules above, with a
+  toggleable word-box overlay drawn scaled-to-fit on the page
+  preview and per-page result caching so re-navigating never re-runs
+  the model.
+- `configs/documents.yaml` centralizes every tunable (allowed
+  extensions, byte + page caps, PDF DPI, binarize + segmentation
+  thresholds under a nested `layout:` block).
+
+Design notes worth preserving:
+
+- **Why extract `pdf` from `data`:** the `data` extra (pandas, scipy,
+  sklearn, matplotlib) is heavy and orthogonal to PDF ingest;
+  isolating `pymupdf` keeps Phase 6 users lean and mirrors the
+  narrow-purpose pattern established by `log` (tensorboard alone)
+  and `export` (onnx alone).
+- **Why sub-configs on `DocumentsConfig`:** `LayoutConfig` is nested
+  rather than flat because binarize + deskew + segmentation
+  thresholds are logically one group of "how do we turn a page into
+  regions" knobs — same pattern as `feedback.yaml`'s `replay:`,
+  `training:`, `eval:` sub-configs.
+- **Why sequential per-word recognition:** matches the drawing tab's
+  single-image `Recognizer.recognize()` call shape. True model-level
+  batching (one `generate()` over all word crops) would be a
+  meaningful speedup but requires widening the Recognizer API — it's
+  a tracked follow-up, not scope creep for Phase 6.
+- **Why per-page result caching in the tab:** page-1 recognition
+  taking seconds and re-running it just because the user clicked
+  Next→Prev is a poor experience; the layout + working_page +
+  PageResult are frozen dataclasses so caching them is cheap and
+  correct.
+
+**Follow-ups (deferred, not blocking):**
+
+- Share a single Recognizer across tabs (TrOCR-small currently loads
+  twice if both tabs recognize this session — the second load
+  reuses the HF cache but still eats ~250MB RAM).
+- True model-level batching in `Recognizer` so a whole page of word
+  crops runs in one `generate()` call.
 
 ## Phase 7 — Language-model-assisted decoding
 

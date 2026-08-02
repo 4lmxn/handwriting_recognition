@@ -56,11 +56,11 @@ Expect a CUDA version + `True`, then `cuda`.
 # Install uv (skip if already installed)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Full sync (GUI + dev + preprocessing/datasets + ML/recognition)
-uv sync --extra gui --extra dev --extra cv --extra ml
+# Full sync (GUI + dev + preprocessing/datasets + ML/recognition + PDF)
+uv sync --extra gui --extra dev --extra cv --extra ml --extra pdf
 
 # Later phases will additionally need:
-#   uv sync --extra gui --extra dev --extra cv --extra ml --extra data --extra log --extra export
+#   uv sync --extra gui --extra dev --extra cv --extra ml --extra pdf --extra data --extra log --extra export
 ```
 
 `ml` pulls in CPU-build `torch` + `transformers` (~200MB) for the recognition pipeline —
@@ -89,6 +89,7 @@ app/                 PySide6 GUI application (main window, tabs, widgets)
 configs/             YAML configuration (paths, app, datasets, augmentation, model, training)
 datasets/            Manifest schema, dataset registry, dataset sources; raw/processed data (not committed)
 docs/                Documentation, including the phase-by-phase ROADMAP
+documents/           Document ingest (Phase 6): image + PDF loaders, page layout, page-level recognition
 experiments/         Training run outputs, kept out of git
 feedback/            User-correction storage (Phase 5) + configs/feedback.yaml
 language_model/      Language-model-assisted decoding and correction (later phase)
@@ -184,3 +185,22 @@ The recognizer improves from your corrections without ever overwriting the base 
 Everything under `weights/adapters/` is versioned and never overwritten — rolling
 back is a one-line config change. See `docs/ROADMAP.md` Phase 5 for the design
 rationale (regression gate, replay buffer, why the adapter targets `v_proj` only).
+
+## Document upload (Phase 6)
+
+Recognize a full page (image or PDF) without drawing it stroke by stroke:
+
+1. Open the **Upload Document** tab.
+2. Click **Open…** — pick a PNG/JPG/TIFF or a PDF. Multi-page PDFs get a Prev/Next
+   pager; single images just show the one page.
+3. Click **Recognize page**. The app detects text regions (deskew → binarize →
+   line + word segmentation) and runs the recognizer over every word crop,
+   showing the transcript on the right and — when *Show word boxes* is ticked —
+   the detected regions overlaid on the page.
+4. Results are cached per page: paging away and back doesn't re-run the model.
+
+Tunables live in `configs/documents.yaml` — allowed extensions, byte and page
+caps, PDF render DPI (150 is the default), and the layout thresholds under
+`layout:` (binarize block size, min line/word height/gap). See
+`docs/ROADMAP.md` Phase 6 for the design rationale (why sequential per-word
+recognition, why the layout config is nested).
