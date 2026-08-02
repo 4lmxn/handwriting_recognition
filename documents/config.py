@@ -1,10 +1,41 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import yaml
 
 from app.config import CONFIGS_DIR
+
+
+@dataclass(frozen=True)
+class LayoutConfig:
+    """Tunables for documents.layout.analyze_page (Phase 6, PR 3).
+
+    Wraps the parameters of adaptive_threshold + deskew + segment_lines +
+    segment_words so a caller can adjust ingest behavior per document
+    type (dense scanned form vs. sparse handwritten note) without
+    passing eight kwargs. See the individual functions in
+    preprocessing/image_ops.py and segmentation/ for the semantics.
+    """
+    deskew: bool = True
+    binarize_block_size: int = 35
+    binarize_c: int = 11
+    min_line_height: int = 5
+    min_line_gap: int = 3
+    min_word_gap: int = 8
+    min_word_width: int = 3
+
+    @classmethod
+    def from_dict(cls, data: dict) -> LayoutConfig:
+        return cls(
+            deskew=bool(data.get("deskew", True)),
+            binarize_block_size=int(data.get("binarize_block_size", 35)),
+            binarize_c=int(data.get("binarize_c", 11)),
+            min_line_height=int(data.get("min_line_height", 5)),
+            min_line_gap=int(data.get("min_line_gap", 3)),
+            min_word_gap=int(data.get("min_word_gap", 8)),
+            min_word_width=int(data.get("min_word_width", 3)),
+        )
 
 
 @dataclass(frozen=True)
@@ -32,6 +63,7 @@ class DocumentsConfig:
     # per-page memory (~2 MB grayscale) or render time. Bump for very
     # small handwriting, drop for scans of large-print documents.
     pdf_render_dpi: int
+    layout: LayoutConfig = field(default_factory=LayoutConfig)
 
     @classmethod
     def from_dict(cls, data: dict) -> DocumentsConfig:
@@ -43,6 +75,7 @@ class DocumentsConfig:
             max_pdf_bytes=int(data["max_pdf_bytes"]),
             max_pdf_pages=int(data["max_pdf_pages"]),
             pdf_render_dpi=int(data["pdf_render_dpi"]),
+            layout=LayoutConfig.from_dict(data.get("layout", {})),
         )
 
 

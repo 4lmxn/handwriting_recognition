@@ -33,3 +33,30 @@ max_pdf_pages: 200
 # for a Letter page. Raise for small handwriting, lower for large-print
 # documents where segmentation is easier and speed matters more.
 pdf_render_dpi: 150
+
+# Page layout / text-region detection (Phase 6, PR 3). Applied to any
+# ingested page (image or PDF) before batch inference. See
+# documents.layout.analyze_page.
+layout:
+  # Whether to deskew the page before segmentation. Cheap when the page
+  # is already close to horizontal (below ~1e-3 degrees the function
+  # returns the image untouched), so leave on by default. Turn off only
+  # if a caller wants coordinates in the exact original coordinate
+  # system.
+  deskew: true
+  # Adaptive-threshold window + bias. Larger block_size handles
+  # uneven lighting on scanned pages but blurs finer strokes; c tunes
+  # the local mean offset. Defaults match preprocessing/image_ops.py.
+  binarize_block_size: 35
+  binarize_c: 11
+  # Line segmentation thresholds. min_line_height drops noise bands
+  # shorter than this; min_line_gap merges vertically-close bands that
+  # come from the same line with an ascender/descender gap.
+  min_line_height: 5
+  min_line_gap: 3
+  # Word segmentation thresholds within a line. Gap larger than
+  # min_word_gap → new word; band narrower than min_word_width → drop
+  # as noise. These need re-tuning for very-small or very-large text
+  # (both scale with x-height, not absolute pixels).
+  min_word_gap: 8
+  min_word_width: 3
