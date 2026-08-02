@@ -47,12 +47,18 @@ export = [
     "onnxruntime>=1.18",
 ]
 
-# Later phases: datasets, PDFs, analysis, plotting
+# Later phases: datasets, analysis, plotting
 data = [
     "pandas>=2.2",
     "scipy>=1.13",
     "scikit-learn>=1.5",
     "matplotlib>=3.9",
+]
+
+# Phase 6: PDF ingest via PyMuPDF. Kept isolated from `data` so the
+# document upload pipeline doesn't pull in the pandas/scipy/sklearn/
+# matplotlib stack just to render PDF pages to pixels.
+pdf = [
     "pymupdf>=1.24",
 ]
 

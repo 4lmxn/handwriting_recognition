@@ -19,3 +19,17 @@ allowed_image_extensions:
   - .tif
   - .tiff
 max_image_bytes: 52428800  # 50 MiB
+
+# PDF ingest (Phase 6, PR 2). max_pdf_bytes is looser than max_image_bytes
+# because a legitimately multi-page scan is bigger than a single-page one;
+# max_pdf_pages is the second guard so a hostile 100k-page PDF can't force
+# the loader into a huge render loop even if it slips under the byte cap.
+max_pdf_bytes: 209715200  # 200 MiB
+max_pdf_pages: 200
+
+# Rendering resolution per page. 150 DPI matches the working-image size
+# TrOCR-small ingests (~384px) after segmentation without forcing an
+# up-then-downsample round trip, and keeps per-page RAM ~2 MB grayscale
+# for a Letter page. Raise for small handwriting, lower for large-print
+# documents where segmentation is easier and speed matters more.
+pdf_render_dpi: 150

@@ -24,6 +24,11 @@ def _make_config(
     return DocumentsConfig(
         allowed_image_extensions=extensions,
         max_image_bytes=max_bytes,
+        # PDF fields aren't exercised by image-loader tests but the
+        # dataclass requires them — pick harmless-but-non-zero defaults.
+        max_pdf_bytes=100_000_000,
+        max_pdf_pages=100,
+        pdf_render_dpi=150,
     )
 
 
@@ -102,8 +107,13 @@ def test_load_image_extension_check_precedes_existence_check(tmp_path):
 def test_load_documents_config_reads_yaml():
     config = load_documents_config()
     assert ".png" in config.allowed_image_extensions
-    assert ".pdf" not in config.allowed_image_extensions  # PDFs land in PR 2
+    # PDFs go through documents.pdf_loader.load_pdf_pages, not load_image —
+    # so ".pdf" deliberately isn't part of the image-loader allowlist.
+    assert ".pdf" not in config.allowed_image_extensions
     assert config.max_image_bytes > 0
+    assert config.max_pdf_bytes > 0
+    assert config.max_pdf_pages > 0
+    assert config.pdf_render_dpi > 0
     # Every entry must already be lowercase with a leading dot — that
     # invariant is what makes the case-normalized suffix check in
     # load_image work.
