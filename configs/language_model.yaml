@@ -25,3 +25,24 @@ dictionary:
   # only if you want proper-noun capitalization preserved through
   # dictionary lookups.
   case_sensitive: false
+
+# Character n-gram LM trained on the merged dictionary above.
+# Feeds the rescoring step below. See language_model/ngram.py for
+# the smoothing choice (Laplace add-k) rationale.
+ngram:
+  n: 3
+  smoothing_k: 1.0
+
+# LM-assisted rescoring (Phase 7). Off by default — a fresh clone
+# with no dictionary sources would run the LM on an empty vocab and
+# effectively just add latency without improving quality. Turn on
+# once base_path (or user_path / domain_path) points at a real word
+# list. See language_model/rescoring.py for the scoring formula.
+rescoring:
+  enabled: false
+  topk: 5
+  lm_weight: 0.3         # combined = (1 - lm_weight) * log(model_conf)
+                          #          +      lm_weight  * lm.score(text)
+  snap_edit_distance: 0   # 0 = no dictionary snap; >0 snaps the
+                          # winner to the nearest dict word if edit
+                          # distance <= this threshold

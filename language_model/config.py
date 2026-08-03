@@ -64,13 +64,68 @@ class DictionaryConfig:
 
 
 @dataclass(frozen=True)
+class RescoringConfig:
+    """Tunables for language_model.rescoring.RescoringRecognizer.
+
+    Off by default (`enabled=False`) so a fresh clone doesn't
+    silently change recognition results — the caller opts in.
+    """
+    enabled: bool = False
+    # Number of beam candidates to pull from the base recognizer and
+    # re-rank. Bigger = more re-ranking headroom, but each candidate
+    # requires an LM score, and beam search itself gets slower with
+    # more beams. 5 is a reasonable balance.
+    topk: int = 5
+    # Weight on the LM's log-probability in the combined score:
+    #   combined = (1 - lm_weight) * log(model_conf) + lm_weight * lm.score(text)
+    # 0.0 disables the LM entirely (equivalent to enabled=False); 1.0
+    # ignores model confidence and picks purely by LM score (usually
+    # a bad idea — the LM is dumber than the model on well-formed
+    # inputs). 0.3 nudges rank order without overriding the model.
+    lm_weight: float = 0.3
+    # Levenshtein threshold for snap-to-nearest-dict-word correction
+    # applied to the winning candidate. 0 = disabled (candidate returned
+    # untouched); positive integers snap when there's a dictionary word
+    # within that edit distance. Applied only if the winner isn't
+    # already in the dictionary, and skipped when the vocab is empty.
+    snap_edit_distance: int = 0
+
+    @classmethod
+    def from_dict(cls, data: dict) -> RescoringConfig:
+        return cls(
+            enabled=bool(data.get("enabled", False)),
+            topk=int(data.get("topk", 5)),
+            lm_weight=float(data.get("lm_weight", 0.3)),
+            snap_edit_distance=int(data.get("snap_edit_distance", 0)),
+        )
+
+
+@dataclass(frozen=True)
+class NGramConfig:
+    """Tunables for the character n-gram LM training pass."""
+    n: int = 3
+    smoothing_k: float = 1.0
+
+    @classmethod
+    def from_dict(cls, data: dict) -> NGramConfig:
+        return cls(
+            n=int(data.get("n", 3)),
+            smoothing_k=float(data.get("smoothing_k", 1.0)),
+        )
+
+
+@dataclass(frozen=True)
 class LanguageModelConfig:
     dictionary: DictionaryConfig
+    ngram: NGramConfig
+    rescoring: RescoringConfig
 
     @classmethod
     def from_dict(cls, data: dict) -> LanguageModelConfig:
         return cls(
             dictionary=DictionaryConfig.from_dict(data.get("dictionary", {})),
+            ngram=NGramConfig.from_dict(data.get("ngram", {})),
+            rescoring=RescoringConfig.from_dict(data.get("rescoring", {})),
         )
 
 
