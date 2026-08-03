@@ -31,6 +31,7 @@ from app.gui.widgets.canvas_widget import CanvasWidget
 from app.gui.widgets.correction_dialog import CorrectionDialog
 from feedback.config import load_feedback_config
 from feedback.store import FeedbackStore
+from language_model.rescoring import RescoringRecognizer, wrap_if_enabled
 from models.adapters.resolver import resolve_adapter_path
 from recognition.config import load_recognition_config
 from recognition.recognizer import RecognitionResult, Recognizer
@@ -49,7 +50,7 @@ class DrawingCanvasTab(QWidget):
         super().__init__(parent)
         self._paths_config = paths_config
         self._canvas = CanvasWidget(canvas_config)
-        self._recognizer: Recognizer | None = None
+        self._recognizer: Recognizer | RescoringRecognizer | None = None
         self._feedback_store: FeedbackStore | None = None
         # Snapshot of the last recognition — what the model saw and what it
         # returned. Kept so "Correct…" writes the exact image that was
@@ -190,7 +191,7 @@ class DrawingCanvasTab(QWidget):
                     recognition_config.adapter_path,
                     feedback_config.adapter_dir_path,
                 )
-                self._recognizer = Recognizer(
+                base = Recognizer(
                     recognition_config.model_name,
                     device=recognition_config.resolved_device(),
                     max_new_tokens=recognition_config.max_new_tokens,
@@ -198,6 +199,10 @@ class DrawingCanvasTab(QWidget):
                     no_repeat_ngram_size=recognition_config.no_repeat_ngram_size,
                     adapter_path=adapter_path,
                 )
+                # No-op when configs/language_model.yaml disables
+                # rescoring (the default) — flipping that flag is the
+                # only change needed to activate LM-assisted decoding.
+                self._recognizer = wrap_if_enabled(base)
             image = self._canvas_to_grayscale_array()
             result = self._recognizer.recognize(image)
             self._last_image = image

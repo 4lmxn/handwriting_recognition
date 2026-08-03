@@ -20,7 +20,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from language_model.config import RescoringConfig
+from language_model.config import RescoringConfig, load_language_model_config
 from language_model.dictionary import Dictionary
 from language_model.ngram import NGramLM
 from recognition.recognizer import RecognitionResult, Recognizer
@@ -117,6 +117,38 @@ class RescoringRecognizer:
         if best_word is not None and best_distance <= threshold:
             return best_word
         return None
+
+
+def wrap_if_enabled(base: Recognizer) -> Recognizer | RescoringRecognizer:
+    """Wrap `base` with LM-assisted rescoring iff configs enable it.
+
+    Called by every place that constructs a base Recognizer for
+    interactive use so a single config flip
+    (`configs/language_model.yaml: rescoring.enabled: true`) turns
+    rescoring on across the whole app without a code change. Returns
+    the untouched base when rescoring is off, so tests + callers that
+    don't set up a dictionary keep behaving exactly as before.
+
+    The dictionary + n-gram are constructed lazily inside this
+    function rather than at import time — a fresh clone with no
+    word lists and rescoring off should pay zero cost.
+    """
+    lm_config = load_language_model_config()
+    if not lm_config.rescoring.enabled:
+        return base
+    dictionary = Dictionary.from_config(lm_config.dictionary)
+    ngram = NGramLM(n=lm_config.ngram.n, smoothing_k=lm_config.ngram.smoothing_k)
+    if len(dictionary) > 0:
+        # No vocab → no useful LM signal; leaving the NGramLM unfitted
+        # is fine because the rescorer's _combined_score falls back to
+        # pure model log-conf when is_fitted is False.
+        ngram.fit(dictionary.words())
+    return RescoringRecognizer(
+        base=base,
+        ngram=ngram,
+        dictionary=dictionary,
+        config=lm_config.rescoring,
+    )
 
 
 def _levenshtein(a: str, b: str) -> int:

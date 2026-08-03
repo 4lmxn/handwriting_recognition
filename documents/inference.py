@@ -19,7 +19,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from documents.layout import PageLayout, WordBox
-from recognition.recognizer import Recognizer
+from recognition.recognizer import SupportsRecognize
 
 
 @dataclass(frozen=True)
@@ -56,7 +56,7 @@ class PageResult:
 
 
 def recognize_page(
-    working_page: np.ndarray, layout: PageLayout, recognizer: Recognizer
+    working_page: np.ndarray, layout: PageLayout, recognizer: SupportsRecognize
 ) -> PageResult:
     """Run the recognizer over every word box in `layout`.
 

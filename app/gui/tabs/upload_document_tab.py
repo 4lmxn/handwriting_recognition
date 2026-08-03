@@ -49,6 +49,7 @@ from documents.pdf_loader import (
     load_pdf_pages,
 )
 from feedback.config import load_feedback_config
+from language_model.rescoring import RescoringRecognizer, wrap_if_enabled
 from models.adapters.resolver import resolve_adapter_path
 from recognition.config import load_recognition_config
 from recognition.recognizer import Recognizer
@@ -67,7 +68,7 @@ class UploadDocumentTab(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._documents_config: DocumentsConfig = load_documents_config()
-        self._recognizer: Recognizer | None = None
+        self._recognizer: Recognizer | RescoringRecognizer | None = None
 
         self._pages: list[np.ndarray] = []
         self._page_index = 0
@@ -231,14 +232,14 @@ class UploadDocumentTab(QWidget):
         finally:
             self._recognize_button.setEnabled(True)
 
-    def _build_recognizer(self) -> Recognizer:
+    def _build_recognizer(self) -> Recognizer | RescoringRecognizer:
         recognition_config = load_recognition_config()
         feedback_config = load_feedback_config()
         adapter_path = resolve_adapter_path(
             recognition_config.adapter_path,
             feedback_config.adapter_dir_path,
         )
-        return Recognizer(
+        base = Recognizer(
             recognition_config.model_name,
             device=recognition_config.resolved_device(),
             max_new_tokens=recognition_config.max_new_tokens,
@@ -246,6 +247,10 @@ class UploadDocumentTab(QWidget):
             no_repeat_ngram_size=recognition_config.no_repeat_ngram_size,
             adapter_path=adapter_path,
         )
+        # No-op when configs/language_model.yaml disables rescoring
+        # (the default) — flipping that flag is the only change needed
+        # to activate LM-assisted decoding.
+        return wrap_if_enabled(base)
 
     # -- Display ----------------------------------------------------------
 

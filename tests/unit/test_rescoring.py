@@ -315,3 +315,96 @@ def test_language_model_config_defaults_have_rescoring_disabled():
     assert 0.0 <= config.rescoring.lm_weight <= 1.0
     assert config.rescoring.snap_edit_distance >= 0
     assert config.ngram.n >= 1
+
+
+# ---------- wrap_if_enabled wiring helper (Phase 7 PR 5) ---------------
+
+
+def test_wrap_if_enabled_returns_base_when_config_disables_rescoring():
+    from unittest.mock import patch
+
+    from language_model.config import (
+        DictionaryConfig,
+        LanguageModelConfig,
+        NGramConfig,
+    )
+    from language_model.rescoring import wrap_if_enabled
+
+    base = MagicMock(spec_set=["recognize", "recognize_topk"])
+    disabled_config = LanguageModelConfig(
+        dictionary=DictionaryConfig(base_path=None, user_path=None, domain_path=None),
+        ngram=NGramConfig(),
+        rescoring=RescoringConfig(enabled=False),
+    )
+    with patch(
+        "language_model.rescoring.load_language_model_config",
+        return_value=disabled_config,
+    ):
+        result = wrap_if_enabled(base)
+    assert result is base  # exact object, no wrapping
+
+
+def test_wrap_if_enabled_wraps_when_rescoring_enabled_even_with_empty_vocab(tmp_path):
+    # A user could legitimately turn rescoring on before adding any
+    # dictionary sources — the wrapper must still return a
+    # RescoringRecognizer (fallback behavior lives inside it), not
+    # crash on the empty vocab.
+    from unittest.mock import patch
+
+    from language_model.config import (
+        DictionaryConfig,
+        LanguageModelConfig,
+        NGramConfig,
+    )
+    from language_model.rescoring import RescoringRecognizer, wrap_if_enabled
+
+    base = MagicMock(spec_set=["recognize", "recognize_topk"])
+    enabled_config = LanguageModelConfig(
+        dictionary=DictionaryConfig(base_path=None, user_path=None, domain_path=None),
+        ngram=NGramConfig(),
+        rescoring=RescoringConfig(enabled=True, topk=3, lm_weight=0.3),
+    )
+    with patch(
+        "language_model.rescoring.load_language_model_config",
+        return_value=enabled_config,
+    ):
+        result = wrap_if_enabled(base)
+    assert isinstance(result, RescoringRecognizer)
+
+
+def test_wrap_if_enabled_fits_ngram_when_vocab_present(tmp_path):
+    from unittest.mock import patch
+
+    from language_model.config import (
+        DictionaryConfig,
+        LanguageModelConfig,
+        NGramConfig,
+    )
+    from language_model.rescoring import wrap_if_enabled
+
+    words_path = tmp_path / "vocab.txt"
+    words_path.write_text("hello\nworld\n", encoding="utf-8")
+    with patch("language_model.config.REPO_ROOT", tmp_path):
+        enabled_config = LanguageModelConfig(
+            dictionary=DictionaryConfig(
+                base_path="vocab.txt", user_path=None, domain_path=None
+            ),
+            ngram=NGramConfig(n=3),
+            rescoring=RescoringConfig(enabled=True, topk=3, lm_weight=0.3),
+        )
+        base = MagicMock(spec_set=["recognize", "recognize_topk"])
+        base.recognize_topk.return_value = [
+            RecognitionResult(text="hello", confidence=0.5),
+            RecognitionResult(text="xyzab", confidence=0.5),
+        ]
+        with patch(
+            "language_model.rescoring.load_language_model_config",
+            return_value=enabled_config,
+        ):
+            wrapper = wrap_if_enabled(base)
+        # Round-trip through recognize() to force the LM to actually
+        # score — if fit didn't happen this would fall back to model
+        # confidence only (both = 0.5) and pick arbitrarily; with a
+        # fitted LM trained on ["hello", "world"], "hello" wins.
+        result = wrapper.recognize(np.zeros((10, 10), dtype=np.uint8))
+        assert result.text == "hello"

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
 import numpy as np
 import torch
@@ -22,6 +23,19 @@ from transformers import TrOCRProcessor, VisionEncoderDecoderModel
 class RecognitionResult:
     text: str
     confidence: float
+
+
+class SupportsRecognize(Protocol):
+    """Structural type for anything with a single-image .recognize() call.
+
+    Kept here rather than in a downstream module so `documents/`,
+    `app/`, etc. can accept either a plain `Recognizer` or a
+    `language_model.rescoring.RescoringRecognizer` without importing
+    the LM package (and thus without a circular dep — rescoring.py
+    already imports from recognition.recognizer).
+    """
+
+    def recognize(self, image: np.ndarray) -> RecognitionResult: ...
 
 
 class Recognizer:
