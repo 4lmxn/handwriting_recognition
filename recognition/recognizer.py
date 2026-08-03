@@ -76,6 +76,76 @@ class Recognizer:
         confidence = self._compute_confidence(output)
         return RecognitionResult(text=text, confidence=confidence)
 
+    def recognize_topk(self, image: np.ndarray, k: int = 5) -> list[RecognitionResult]:
+        """Return the top-k beam candidates for `image`, most-likely first.
+
+        Introduced in Phase 7 for LM-assisted rescoring: a separate LM
+        can re-rank these k options by combining each candidate's own
+        `confidence` with an external log-prob. `.recognize()` still
+        returns a single best result via its greedy-friendly path
+        (unchanged), so all pre-Phase-7 callers keep working.
+        """
+        if k < 1:
+            raise ValueError(f"k must be >= 1 (got {k})")
+
+        pil_image = Image.fromarray(image).convert("RGB")
+        pixel_values = self._processor(images=pil_image, return_tensors="pt").pixel_values
+        pixel_values = pixel_values.to(self._device)
+
+        # HF beam search requires num_beams >= num_return_sequences and
+        # >= 2 to actually be beam search. Using k directly for both
+        # keeps each returned candidate an independent beam rather than
+        # having beams merge and duplicate outputs.
+        num_beams = max(k, 2)
+
+        with torch.no_grad():
+            output = self._model.generate(
+                pixel_values,
+                max_new_tokens=self._max_new_tokens,
+                repetition_penalty=self._repetition_penalty,
+                no_repeat_ngram_size=self._no_repeat_ngram_size,
+                num_beams=num_beams,
+                num_return_sequences=k,
+                output_scores=True,
+                return_dict_in_generate=True,
+            )
+
+        texts = self._processor.batch_decode(output.sequences, skip_special_tokens=True)
+        confidences = self._compute_topk_confidences(output)
+        return [
+            RecognitionResult(text=text.strip(), confidence=confidence)
+            for text, confidence in zip(texts, confidences, strict=True)
+        ]
+
+    def _compute_topk_confidences(self, output) -> list[float]:
+        """Per-candidate mean-token-probability under beam search.
+
+        Same semantic as `_compute_confidence`'s single-candidate
+        formula (mean per-token generation probability). Uses
+        `compute_transition_scores` so each returned sequence gets the
+        log-probs of the tokens *it* picked — not the same shared
+        scores tensor that `_compute_confidence` reads under greedy.
+        """
+        transition_scores = self._model.compute_transition_scores(
+            output.sequences,
+            output.scores,
+            output.beam_indices,
+            normalize_logits=True,
+        )
+        # transition_scores is (num_return_sequences, generated_len).
+        # Entries for padding positions are -inf; masking them out
+        # keeps the mean over genuinely-generated tokens only.
+        probs = transition_scores.exp()
+        finite_mask = torch.isfinite(transition_scores)
+        confidences: list[float] = []
+        for seq_probs, seq_mask in zip(probs, finite_mask, strict=True):
+            valid = seq_probs[seq_mask]
+            if valid.numel() == 0:
+                confidences.append(0.0)
+            else:
+                confidences.append(float(valid.mean().item()))
+        return confidences
+
     @staticmethod
     def _compute_confidence(output) -> float:
         scores = output.scores
