@@ -92,7 +92,7 @@ docs/                Documentation, including the phase-by-phase ROADMAP
 documents/           Document ingest (Phase 6): image + PDF loaders, page layout, page-level recognition
 experiments/         Training run outputs, kept out of git
 feedback/            User-correction storage (Phase 5) + configs/feedback.yaml
-language_model/      Language-model-assisted decoding and correction (later phase)
+language_model/      LM-assisted decoding (Phase 7): dictionary, char n-gram, rescoring
 logs/                Application and training logs (not committed)
 models/              LoRA personalization adapters (Phase 5) + adapter path resolver
 outputs/             Inference outputs (not committed)
@@ -204,3 +204,36 @@ caps, PDF render DPI (150 is the default), and the layout thresholds under
 `layout:` (binarize block size, min line/word height/gap). See
 `docs/ROADMAP.md` Phase 6 for the design rationale (why sequential per-word
 recognition, why the layout config is nested).
+
+## Language-model-assisted decoding (Phase 7)
+
+Optional rescoring layer that re-ranks the model's top-K beam candidates
+against a character n-gram LM trained on your dictionary, and can snap the
+winner to the nearest known word within a Levenshtein threshold. Off by
+default — enable it once you've pointed at least one word list at the
+config.
+
+1. Drop a word list on disk (either a `.json` array of strings or a
+   plain-text file with one word per line — `#` comments and blank lines
+   are ignored).
+2. Edit `configs/language_model.yaml`:
+
+   ```yaml
+   dictionary:
+     base_path: "path/to/words.txt"   # e.g. /usr/share/dict/words on Linux
+     user_path: "path/to/my_words.txt"   # personal names, uncommon terms
+     domain_path: "path/to/jargon.txt"   # per-project vocabulary
+   rescoring:
+     enabled: true
+     topk: 5
+     lm_weight: 0.3           # weight on LM vs model confidence
+     snap_edit_distance: 1    # 0 disables snap-to-nearest correction
+   ```
+
+3. Restart the app. Both the drawing tab and the upload document tab
+   automatically pick up the wrapped recognizer.
+
+Confidence displayed to the user stays the model's own — rescoring changes
+which candidate text is selected, not what "confidence" means. See
+`docs/ROADMAP.md` Phase 7 for the design rationale (why character n-gram,
+why Laplace smoothing, why post-selection snap rather than a hard filter).

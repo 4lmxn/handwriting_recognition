@@ -335,12 +335,93 @@ Design notes worth preserving:
 - True model-level batching in `Recognizer` so a whole page of word
   crops runs in one `generate()` call.
 
-## Phase 7 — Language-model-assisted decoding
+## Phase 7 — Language-model-assisted decoding ✅
 
-- Beam search decoding with a lightweight LM (n-gram or small transformer) rescoring
-  candidates.
-- Dictionary support: base vocabulary + user-custom vocabulary + technical/domain
-  vocabulary.
+**Complete.** LM-assisted rescoring wired end-to-end: the base
+recognizer emits its top-K beam candidates, a character n-gram LM
+trained on a merged (base + user + domain) dictionary re-ranks
+them, and an optional Levenshtein snap-to-nearest-dict-word fixes
+one-edit typos. Off by default — a single config flip activates it
+across both the drawing and upload tabs with no code change.
+
+**Shipped:**
+
+- `language_model/dictionary.py` — three optional word-list sources
+  (base / user / domain) merged into one case-normalized frozenset.
+  Loader accepts .json arrays or plain-text one-word-per-line with
+  `#` comments; missing/blank sources contribute zero words rather
+  than raising, so a fresh clone works.
+- `language_model/ngram.py` — `NGramLM(n=3, smoothing_k=1.0)`
+  trained via `.fit(words)`, scored via `.score(text) → log-prob`.
+  Laplace add-k smoothing guarantees a finite score for unseen
+  n-grams. PUA-code-point boundary sentinels can't collide with
+  recognizer output.
+- `recognition/recognizer.py` — new `.recognize_topk(image, k=5)`
+  method exposes the top-K beam candidates the model already
+  produces internally, with per-candidate confidence via
+  `compute_transition_scores` (padded `-inf` positions masked out
+  of the mean so short candidates aren't penalized for their own
+  padding). Default `.recognize()` unchanged — pre-Phase-7 callers
+  keep working.
+- `language_model/rescoring.py` — `RescoringRecognizer` wraps a
+  base and applies `(1 - lm_weight) * log(model_conf) + lm_weight
+  * lm.score(text)` over the top-K, optional snap-to-nearest-dict
+  Levenshtein correction on the winner. Confidence on the returned
+  result is always the model's own (rescoring changes text
+  selection, not confidence semantics). `wrap_if_enabled(base)`
+  wiring helper turns rescoring on wherever a Recognizer is
+  constructed.
+- Both existing tabs (drawing canvas + upload document) call
+  `wrap_if_enabled` at the end of their `_build_recognizer` path
+  — flipping `configs/language_model.yaml: rescoring.enabled: true`
+  activates LM decoding everywhere.
+- `recognition/recognizer.SupportsRecognize` Protocol so downstream
+  modules (`documents/`, `app/`) can accept either recognizer without
+  importing the LM package — avoids a circular dep since
+  `rescoring.py` already imports `Recognizer`.
+
+Design notes worth preserving:
+
+- **Why character n-gram over word-level or small transformer:**
+  rescoring targets misrecognitions — a wrong letter in a real word
+  ("thc" for "the") that a word-LM only sees as OOV. A character
+  LM assigns those a low but finite probability that still ranks
+  candidates correctly. Small-transformer LMs are more accurate but
+  add a heavy download and inference cost on top of TrOCR, working
+  against the "compact pretrained backbones" strategy from the
+  Decisions section.
+- **Why Laplace add-k over Kneser-Ney / backoff:** the LM only
+  needs to *rank* an already-small top-K list, not produce
+  calibrated probabilities. Add-k gives every n-gram a floor prob
+  so unseen substrings never crash a score to -inf. Upgrading is a
+  follow-up if empirical rescoring falls short.
+- **Why rescore top-K rather than modify beam expansion:** much
+  smaller change to `Recognizer`, keeps HF's `generate()` as-is,
+  and top-K + rescore is the standard bolted-on-LM approach.
+- **Why dictionary snap is post-correction, not a hard filter:**
+  preserves the model's ability to output OOV proper nouns / typos
+  the user actually wrote, while still fixing the "the → thc" case
+  the LM alone might not fully repair.
+- **Why off by default:** enabling rescoring with an empty vocab
+  would run the LM on nothing and just add latency without
+  improving anything; opt-in avoids surprising a fresh clone.
+- **Why the wiring helper lives in `language_model/`, not
+  `recognition/`:** `recognition/` shouldn't depend on
+  `language_model/`, but `language_model/rescoring.py` already
+  imports `Recognizer`, so the helper naturally lives there. Both
+  tabs import it directly.
+
+**Follow-ups (deferred, not blocking):**
+
+- Small-transformer LM as an optional upgrade path if the n-gram's
+  rescoring quality plateaus on real handwriting evals.
+- Dictionary Manager GUI tab (add/remove words, view provenance)
+  — stays in Phase 9 alongside the other management surfaces
+  rather than duplicating it here.
+- Real-corpus base vocabulary — currently the user points
+  `base_path` at whatever list they have (system word file,
+  frequency list, etc.); shipping a curated ~10k-word default
+  would be a nicer out-of-the-box experience.
 
 ## Phase 8 — Structured / mathematical notation (scoped down)
 
