@@ -1,0 +1,39 @@
+# Phase 8 math-aware recognition (sub / superscript + simple fractions
+# + simple roots → LaTeX fragments).
+#
+# Off by default — a fresh clone with no math content in its documents
+# sees no behavior change from Phase 7. Turning on wires the math-aware
+# batch-inference path in the upload document tab so recognized output
+# includes LaTeX for detected structural elements.
+#
+# Scope reminder: this phase covers ONLY sub/superscript, simple
+# fractions (a horizontal bar with content above and below), and simple
+# roots. Complex nested expressions, integrals, summations, matrices,
+# and chemistry are explicitly out of scope per docs/ROADMAP.md Phase 8.
+enabled: false
+
+# ----- Sub / superscript positioning thresholds ------------------------
+# A character is flagged as super/subscript when BOTH position AND size
+# conditions are met — position alone would confuse an ascender ("l")
+# with a superscript; size alone would confuse a small letter ("o")
+# with one.
+#
+# Position: super's top must sit above (line_top - super_top_ratio *
+# line_height); sub's bottom must sit below (line_bottom +
+# sub_bottom_ratio * line_height).
+#
+# Size: the char must be smaller than max_script_size_ratio *
+# median_char_height in the surrounding word.
+super_top_ratio: 0.2
+sub_bottom_ratio: 0.2
+max_script_size_ratio: 0.75
+
+# ----- Fraction bar geometry -------------------------------------------
+# A candidate horizontal stroke qualifies as a fraction bar when its
+# length is >= min_fraction_bar_length_ratio of the enclosing region
+# width AND its thickness (in pixels) is <= max_fraction_bar_thickness.
+# The bar must also have content both above and below to become a real
+# Fraction — enforced in the detector, not in config, because that's
+# structural rather than tunable.
+min_fraction_bar_length_ratio: 0.3
+max_fraction_bar_thickness: 4
